@@ -1,0 +1,18 @@
+
+
+function changed {
+    git diff --name-only HEAD@{1} HEAD | grep "^$1" >/dev/null 2>&1
+}
+
+echo 'Checking for changes in package-lock.json...'
+
+if changed 'package-lock.json'; then
+    echo "📦 package-lock.json changed. Run npm install to bring your dependencies up to date."
+    npm install
+fi
+
+echo 'You are up to date :)'
+
+echo 'If necessary, you can run npm run prebuild to generate native code.'
+
+exit 0
