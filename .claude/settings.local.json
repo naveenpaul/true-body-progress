@@ -45,7 +45,21 @@
       "Bash(npx depcheck:*)",
       "Bash(eas --version)",
       "Bash(chmod +x:*)",
-      "Skill(gstack-upgrade)"
+      "Skill(gstack-upgrade)",
+      "Bash(git commit -m ':*)",
+      "Bash(git commit --no-verify -m ':*)",
+      "Bash(pnpm expo:*)",
+      "Bash(timeout 60 pnpm test)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(ls eslint.config*)",
+      "Bash(grep -l \"max-lines-per-function\\\\|markdown\" eslint.config*)",
+      "Bash(node --require ./scripts/polyfill-object-groupby.js ./node_modules/eslint/bin/eslint.js . --fix)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"lint exit=$?\")",
+      "Bash(grep:*)",
+      "Bash(echo \"lint=$?\")",
+      "Bash(git checkout:*)"
     ]
   }
 }

@@ -22,10 +22,20 @@ type UserState = {
     preferredUnits?: UnitSystem,
   ) => Promise<void>;
   updateUnits: (units: UnitSystem) => Promise<void>;
+  updateProfile: (updates: {
+    name?: string;
+    height_cm?: number;
+    age?: number;
+    gender?: Gender;
+    goal_type?: GoalType;
+    target_weight?: number;
+    preferred_units?: UnitSystem;
+  }) => Promise<void>;
 };
 
 function requireDb(db: SQLiteDatabase | null): SQLiteDatabase {
-  if (!db) throw new Error('user store: db not initialized');
+  if (!db)
+    throw new Error('user store: db not initialized');
   return db;
 }
 
@@ -55,6 +65,13 @@ const _useUserStore = create<UserState>((set, get) => ({
   updateUnits: async (units) => {
     const db = requireDb(get().db);
     await userRepo.updateUser(db, { preferred_units: units });
+    const user = await userRepo.getUser(db);
+    set({ user });
+  },
+
+  updateProfile: async (updates) => {
+    const db = requireDb(get().db);
+    await userRepo.updateUser(db, updates);
     const user = await userRepo.getUser(db);
     set({ user });
   },

@@ -10,7 +10,8 @@ const envSchema = z.object({
   EXPO_PUBLIC_BUNDLE_ID: z.string(),
   EXPO_PUBLIC_PACKAGE: z.string(),
   EXPO_PUBLIC_VERSION: z.string(),
-  EXPO_PUBLIC_API_URL: z.string().url(),
+  // App is fully local-first; API URL is unused but kept for template compatibility.
+  EXPO_PUBLIC_API_URL: z.string().url().optional().or(z.literal('')),
   EXPO_PUBLIC_ASSOCIATED_DOMAIN: z.string().url().optional(),
   EXPO_PUBLIC_VAR_NUMBER: z.number(),
   EXPO_PUBLIC_VAR_BOOL: z.boolean(),
@@ -43,8 +44,8 @@ const SCHEMES = {
 
 const NAME = 'Gym';
 
-// Check if strict validation is required (before prebuild)
-const STRICT_ENV_VALIDATION = process.env.STRICT_ENV_VALIDATION === '1';
+// Always validate. The legacy STRICT_ENV_VALIDATION toggle let bad values flow into
+// runtime; now any misconfiguration fails fast at module load.
 
 // Build env object
 const _env: z.infer<typeof envSchema> = {
@@ -64,25 +65,19 @@ const _env: z.infer<typeof envSchema> = {
 function getValidatedEnv(env: z.infer<typeof envSchema>) {
   const parsed = envSchema.safeParse(env);
 
-  if (parsed.success === false) {
+  if (!parsed.success) {
     const errorMessage
       = `❌ Invalid environment variables:${
         JSON.stringify(parsed.error.flatten().fieldErrors, null, 2)
       }\n❌ Missing variables in .env file for APP_ENV=${EXPO_PUBLIC_APP_ENV}`
       + `\n💡 Tip: If you recently updated the .env file, try restarting with -c flag to clear the cache.`;
-
-    if (STRICT_ENV_VALIDATION) {
-      console.error(errorMessage);
-      throw new Error('Invalid environment variables');
-    }
-  }
-  else {
-    console.log('✅ Environment variables validated successfully');
+    console.error(errorMessage);
+    throw new Error('Invalid environment variables');
   }
 
-  return parsed.success ? parsed.data : env;
+  return parsed.data;
 }
 
-const Env = STRICT_ENV_VALIDATION ? getValidatedEnv(_env) : _env;
+const Env = getValidatedEnv(_env);
 
 export default Env;

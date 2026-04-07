@@ -1,4 +1,3 @@
-/* eslint-disable better-tailwindcss/no-unknown-classes */
 import { Tabs } from 'expo-router';
 import * as React from 'react';
 import Svg, { Path } from 'react-native-svg';
@@ -95,6 +94,12 @@ export default function TabLayout() {
           title: 'Settings',
           tabBarIcon: ({ color }) => <SettingsIcon color={color} />,
           tabBarButtonTestID: 'settings-tab',
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

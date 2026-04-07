@@ -1,4 +1,3 @@
-/* eslint-disable better-tailwindcss/no-unknown-classes */
 import type { Suggestion, WorkoutSetWithExercise } from '@/lib/types';
 
 import { useRouter } from 'expo-router';
@@ -88,61 +87,69 @@ export function DashboardScreen() {
     <ScrollView className="flex-1 bg-charcoal-950" contentContainerClassName="p-4 pb-8 pt-14">
       {/* Greeting */}
       <Text className="text-xl font-bold text-white">
-        {greeting}, {user.name}
+        {greeting}
+        ,
+        {user.name}
       </Text>
       <Text className="mb-6 text-sm text-charcoal-400">
         {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
       </Text>
 
       {/* Stats Row */}
-      {latest ? (
-        <View className="mb-4 flex-row items-center justify-around py-4">
-          {latest.weight != null && (
-            <View className="items-center">
-              <Text className="text-3xl font-bold text-white">
-                {formatWeight(latest.weight, units).split(' ')[0]}
-              </Text>
-              <Text className="text-sm text-charcoal-400">
-                {units === 'metric' ? 'kg' : 'lbs'}
-                {weeklyChange !== null && (
-                  <Text className={weeklyChange <= 0 ? 'text-success-500' : 'text-danger-500'}>
-                    {' '}{weeklyChange > 0 ? '+' : ''}{weeklyChange}
+      {latest
+        ? (
+            <View className="mb-4 flex-row items-center justify-around py-4">
+              {latest.weight != null && (
+                <View className="items-center">
+                  <Text className="text-3xl font-bold text-white">
+                    {formatWeight(latest.weight, units).split(' ')[0]}
                   </Text>
-                )}
+                  <Text className="text-sm text-charcoal-400">
+                    {units === 'metric' ? 'kg' : 'lbs'}
+                    {weeklyChange !== null && (
+                      <Text className={weeklyChange <= 0 ? 'text-success-500' : 'text-danger-500'}>
+                        {' '}
+                        {weeklyChange > 0 ? '+' : ''}
+                        {weeklyChange}
+                      </Text>
+                    )}
+                  </Text>
+                </View>
+              )}
+              {latest.weight != null && latest.waist != null && <View className="h-10 w-px bg-charcoal-700" />}
+              {latest.waist != null && (
+                <View className="items-center">
+                  <Text className="text-3xl font-bold text-white">
+                    {formatLength(latest.waist, units).split(' ')[0]}
+                  </Text>
+                  <Text className="text-sm text-charcoal-400">
+                    {units === 'metric' ? 'cm' : 'in'}
+                    {' '}
+                    waist
+                  </Text>
+                </View>
+              )}
+              <View className="h-10 w-px bg-charcoal-700" />
+              <View className="items-center">
+                <Text className="text-3xl font-bold text-white">{targetCals}</Text>
+                <Text className="text-sm text-charcoal-400">kcal target</Text>
+              </View>
+            </View>
+          )
+        : (
+            <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
+              <Text className="mb-4 text-center text-charcoal-400">
+                Log your first weigh-in to see your stats here
               </Text>
+              <Button
+                label="Log Weight"
+                variant="outline"
+                onPress={() => router.push('/(app)/body' as any)}
+                className="border-success-500"
+                textClassName="text-success-500"
+              />
             </View>
           )}
-          {latest.weight != null && latest.waist != null && <View className="h-10 w-px bg-charcoal-700" />}
-          {latest.waist != null && (
-            <View className="items-center">
-              <Text className="text-3xl font-bold text-white">
-                {formatLength(latest.waist, units).split(' ')[0]}
-              </Text>
-              <Text className="text-sm text-charcoal-400">
-                {units === 'metric' ? 'cm' : 'in'} waist
-              </Text>
-            </View>
-          )}
-          <View className="h-10 w-px bg-charcoal-700" />
-          <View className="items-center">
-            <Text className="text-3xl font-bold text-white">{targetCals}</Text>
-            <Text className="text-sm text-charcoal-400">kcal target</Text>
-          </View>
-        </View>
-      ) : (
-        <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
-          <Text className="mb-4 text-center text-charcoal-400">
-            Log your first weigh-in to see your stats here
-          </Text>
-          <Button
-            label="Log Weight"
-            variant="outline"
-            onPress={() => router.push('/(app)/body' as any)}
-            className="border-success-500"
-            textClassName="text-success-500"
-          />
-        </View>
-      )}
 
       {/* Suggestion Banner */}
       {(llmInsight || topSuggestion) && (
@@ -157,32 +164,44 @@ export function DashboardScreen() {
       )}
 
       {/* Last Workout */}
-      {lastSession ? (
-        <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
-          <View className="mb-2 flex-row items-center justify-between">
-            <Text className="text-base font-semibold text-white">Last Workout</Text>
-            <Text className="text-xs text-charcoal-400">
-              {formatRelativeDate(lastSession.date)} · {formatDuration(lastSession.duration)}
-            </Text>
-          </View>
-          {lastWorkoutSets.slice(0, 3).map((set, i) => (
-            <Text key={i} className="mb-1 text-sm text-charcoal-200">
-              {set.exercise_name} {formatWeight(set.weight, units).split(' ')[0]}×{set.reps}
-            </Text>
-          ))}
-          {lastWorkoutSets.length > 3 && (
-            <Text className="text-xs text-charcoal-400">
-              +{lastWorkoutSets.length - 3} more sets
-            </Text>
+      {lastSession
+        ? (
+            <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
+              <View className="mb-2 flex-row items-center justify-between">
+                <Text className="text-base font-semibold text-white">Last Workout</Text>
+                <Text className="text-xs text-charcoal-400">
+                  {formatRelativeDate(lastSession.date)}
+                  {' '}
+                  ·
+                  {formatDuration(lastSession.duration)}
+                </Text>
+              </View>
+              {lastWorkoutSets.slice(0, 3).map((set, i) => (
+                <Text key={i} className="mb-1 text-sm text-charcoal-200">
+                  {set.exercise_name}
+                  {' '}
+                  {formatWeight(set.weight, units).split(' ')[0]}
+                  ×
+                  {set.reps}
+                </Text>
+              ))}
+              {lastWorkoutSets.length > 3 && (
+                <Text className="text-xs text-charcoal-400">
+                  +
+                  {lastWorkoutSets.length - 3}
+                  {' '}
+                  more sets
+                </Text>
+              )}
+            </View>
+          )
+        : (
+            <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
+              <Text className="text-center text-charcoal-400">
+                No workouts yet. Start your first session!
+              </Text>
+            </View>
           )}
-        </View>
-      ) : (
-        <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
-          <Text className="text-center text-charcoal-400">
-            No workouts yet. Start your first session!
-          </Text>
-        </View>
-      )}
 
       {/* Quick Actions */}
       <View className="mt-2 flex-row gap-4">
@@ -207,7 +226,9 @@ export function DashboardScreen() {
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
+  if (hour < 12)
+    return 'Good morning';
+  if (hour < 17)
+    return 'Good afternoon';
   return 'Good evening';
 }

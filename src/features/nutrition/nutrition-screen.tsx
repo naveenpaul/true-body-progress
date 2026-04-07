@@ -1,4 +1,3 @@
-/* eslint-disable better-tailwindcss/no-unknown-classes */
 import type { NutritionEntry } from '@/lib/types';
 
 import { useSQLiteContext } from 'expo-sqlite';
@@ -27,6 +26,9 @@ export function NutritionScreen() {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const parseNum = (s: string): number => Number.parseFloat(s.replace(',', '.'));
 
   const currentDate = today();
 
@@ -53,30 +55,61 @@ export function NutritionScreen() {
   }, [loadData]);
 
   const handleSave = async () => {
-    const cal = parseFloat(calories);
-    const prot = parseFloat(protein);
-    const carb = parseFloat(carbs);
-    const fat = parseFloat(fats);
-    if (!mealName || isNaN(cal)) return;
+    if (!mealName.trim()) {
+      setSaveError('Meal name is required');
+      return;
+    }
+    const cal = parseNum(calories);
+    if (Number.isNaN(cal) || cal < 0) {
+      setSaveError('Calories must be a non-negative number');
+      return;
+    }
+    // Macros are optional but if provided, must be valid non-negative numbers.
+    const macroFields: Array<[string, string]> = [
+      ['Protein', protein],
+      ['Carbs', carbs],
+      ['Fats', fats],
+    ];
+    const parsedMacros: Record<string, number> = {};
+    for (const [name, raw] of macroFields) {
+      if (!raw) {
+        parsedMacros[name] = 0;
+        continue;
+      }
+      const v = parseNum(raw);
+      if (Number.isNaN(v) || v < 0) {
+        setSaveError(`${name} must be a non-negative number`);
+        return;
+      }
+      parsedMacros[name] = v;
+    }
 
+    setSaveError(null);
     setSaving(true);
-    await nutritionRepo.logMeal(
-      db,
-      currentDate,
-      mealName,
-      cal,
-      isNaN(prot) ? 0 : prot,
-      isNaN(carb) ? 0 : carb,
-      isNaN(fat) ? 0 : fat,
-    );
-    setMealName('');
-    setCalories('');
-    setProtein('');
-    setCarbs('');
-    setFats('');
-    setShowForm(false);
-    setSaving(false);
-    await loadData();
+    try {
+      await nutritionRepo.logMeal(
+        db,
+        currentDate,
+        mealName.trim(),
+        cal,
+        parsedMacros.Protein,
+        parsedMacros.Carbs,
+        parsedMacros.Fats,
+      );
+      setMealName('');
+      setCalories('');
+      setProtein('');
+      setCarbs('');
+      setFats('');
+      setShowForm(false);
+      await loadData();
+    }
+    catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save meal');
+    }
+    finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -150,6 +183,9 @@ export function NutritionScreen() {
                 placeholderTextColor="#7D7D7D"
               />
             </View>
+            {saveError && (
+              <Text className="mb-2 text-sm text-danger-500">{saveError}</Text>
+            )}
             <Button
               label={saving ? 'Saving...' : 'Save Meal'}
               onPress={handleSave}
@@ -160,27 +196,37 @@ export function NutritionScreen() {
           </View>
         )}
 
-        {meals.length === 0 && !showForm ? (
-          <View className="items-center rounded-xl bg-charcoal-900 p-6">
-            <Text className="text-center text-charcoal-400">
-              No meals logged today. Tap + Add Meal to start tracking.
-            </Text>
-          </View>
-        ) : (
-          meals.map(meal => (
-            <View key={meal.id} className="mb-1 flex-row items-center rounded-lg bg-charcoal-900 p-3">
-              <View className="flex-1">
-                <Text className="text-base text-white">{meal.meal_name}</Text>
-                <Text className="text-xs text-charcoal-400">
-                  {meal.calories} kcal · {meal.protein}g P · {meal.carbs}g C · {meal.fats}g F
+        {meals.length === 0 && !showForm
+          ? (
+              <View className="items-center rounded-xl bg-charcoal-900 p-6">
+                <Text className="text-center text-charcoal-400">
+                  No meals logged today. Tap + Add Meal to start tracking.
                 </Text>
               </View>
-              <Pressable onPress={() => handleDelete(meal.id)} className="p-2">
-                <Text className="text-charcoal-500">✕</Text>
-              </Pressable>
-            </View>
-          ))
-        )}
+            )
+          : (
+              meals.map(meal => (
+                <View key={meal.id} className="mb-1 flex-row items-center rounded-lg bg-charcoal-900 p-3">
+                  <View className="flex-1">
+                    <Text className="text-base text-white">{meal.meal_name}</Text>
+                    <Text className="text-xs text-charcoal-400">
+                      {meal.calories}
+                      {' '}
+                      kcal ·
+                      {meal.protein}
+                      g P ·
+                      {meal.carbs}
+                      g C ·
+                      {meal.fats}
+                      g F
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => handleDelete(meal.id)} className="p-2">
+                    <Text className="text-charcoal-500">✕</Text>
+                  </Pressable>
+                </View>
+              ))
+            )}
       </View>
     </ScrollView>
   );
@@ -200,7 +246,13 @@ function MacroBar({ label, current, target, color, unit }: {
         <Text className="text-xs text-charcoal-400">{label}</Text>
         <Text className="text-xs">
           <Text className="font-bold text-white">{current}</Text>
-          <Text className="text-charcoal-400"> / {target} {unit}</Text>
+          <Text className="text-charcoal-400">
+            {' '}
+            /
+            {target}
+            {' '}
+            {unit}
+          </Text>
         </Text>
       </View>
       <View className="h-2 overflow-hidden rounded-full bg-charcoal-800">

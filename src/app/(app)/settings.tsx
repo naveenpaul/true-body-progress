@@ -1,3 +1,3 @@
-import { ProfileSetupScreen } from '@/features/profile/profile-setup-screen';
+import { SettingsScreen } from '@/features/settings/settings-screen';
 
-export default ProfileSetupScreen;
+export default SettingsScreen;

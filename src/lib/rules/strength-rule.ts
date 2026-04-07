@@ -7,7 +7,8 @@ type StrengthInput = {
 
 export function evaluateStrength(input: StrengthInput): Suggestion | null {
   const { exerciseName, recentSets } = input;
-  if (recentSets.length === 0) return null;
+  if (recentSets.length === 0)
+    return null;
 
   const topSets = recentSets.slice(-3);
 
@@ -26,7 +27,7 @@ export function evaluateStrength(input: StrengthInput): Suggestion | null {
   // If hitting 12+ reps consistently, suggest increase
   const highRepCount = topSets.filter(s => s.reps >= 12).length;
   if (highRepCount >= 2) {
-    const currentWeight = topSets[topSets.length - 1].weight;
+    const currentWeight = topSets.at(-1)!.weight;
     const increment = currentWeight >= 40 ? 2.5 : 1.25;
     return {
       id: `strength-increase-${exerciseName}`,
@@ -40,7 +41,7 @@ export function evaluateStrength(input: StrengthInput): Suggestion | null {
   // If reps dropping below 6, suggest decrease
   const lowRepCount = topSets.filter(s => s.reps < 6).length;
   if (lowRepCount >= 2) {
-    const currentWeight = topSets[topSets.length - 1].weight;
+    const currentWeight = topSets.at(-1)!.weight;
     return {
       id: `strength-decrease-${exerciseName}`,
       type: 'strength',

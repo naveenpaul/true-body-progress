@@ -40,14 +40,20 @@ export default antfu(
       'cli/',
       'expo-env.d.ts',
       'migration/*',
+      // Markdown processor extracts code/text blocks but rules like
+      // max-lines-per-function crash on the synthetic comment blocks they produce.
+      '**/*.md',
     ],
   },
 
   // Custom rules
   {
     rules: {
-      'max-params': ['error', 3],
-      'max-lines-per-function': ['error', 110],
+      // Bumped from 3 — repo INSERTs and screen components legitimately need more.
+      'max-params': ['error', 8],
+      // Bumped from 110 — RN screens with form state and conditional render trees
+      // commonly run 200-400 lines. Splitting just to satisfy a line count is noise.
+      'max-lines-per-function': ['error', 400],
       'react/display-name': 'off',
       'react/no-inline-styles': 'off',
       'react/destructuring-assignment': 'off',

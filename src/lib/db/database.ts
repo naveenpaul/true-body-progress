@@ -83,8 +83,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE INDEX IF NOT EXISTS idx_workout_set_exercise_date
-      ON workout_set(exercise_id, created_at);
+    -- Indexed on session_id (not created_at) because all date-filtered queries
+    -- join through workout_session.date, so the index lookup needs session_id.
+    CREATE INDEX IF NOT EXISTS idx_workout_set_exercise_session
+      ON workout_set(exercise_id, session_id);
+    DROP INDEX IF EXISTS idx_workout_set_exercise_date;
     CREATE INDEX IF NOT EXISTS idx_workout_set_session
       ON workout_set(session_id);
     CREATE INDEX IF NOT EXISTS idx_body_metric_date

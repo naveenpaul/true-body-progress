@@ -13,15 +13,20 @@ import { evaluateStrength } from './strength-rule';
 export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[]> {
   const suggestions: Suggestion[] = [];
 
-  const [weightTrend, waistTrend, recentSessions] = await Promise.all([
+  const [weightTrend, waistTrend, recentSessionsDesc] = await Promise.all([
     bodyMetricsRepo.getWeightTrend(db, 30),
     bodyMetricsRepo.getWaistTrend(db, 30),
     workoutRepo.getRecentSessions(db, 10),
   ]);
 
+  // getRecentSessions returns newest-first. The strength/recovery rules below assume
+  // oldest-first ("recent" = end of array), so flip once here at the boundary.
+  const recentSessions = [...recentSessionsDesc].reverse();
+
   // Fat loss rule
   const fatLossSuggestion = evaluateFatLoss({ weightTrend, waistTrend });
-  if (fatLossSuggestion) suggestions.push(fatLossSuggestion);
+  if (fatLossSuggestion)
+    suggestions.push(fatLossSuggestion);
 
   // Strength rules per exercise
   const exerciseIds = new Set<number>();
@@ -34,27 +39,29 @@ export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[
 
   for (const exerciseId of exerciseIds) {
     const exercise = await exerciseRepo.getExerciseById(db, exerciseId);
-    if (!exercise) continue;
+    if (!exercise)
+      continue;
 
-    const lastSets = await workoutRepo.getLastSetsForExercise(db, exerciseId);
+    const recentSets = await workoutRepo.getRecentSetsForExercise(db, exerciseId, 3);
     const strengthSuggestion = evaluateStrength({
       exerciseName: exercise.name,
-      recentSets: lastSets.map(s => ({
+      recentSets: recentSets.map(s => ({
         reps: s.reps,
         weight: s.weight,
         rpe: s.rpe,
-        date: s.created_at,
+        date: s.date,
       })),
     });
-    if (strengthSuggestion) suggestions.push(strengthSuggestion);
+    if (strengthSuggestion)
+      suggestions.push(strengthSuggestion);
   }
 
   // Recovery rule
   const sessionsWithExercises = await Promise.all(
-    recentSessions.slice(0, 5).map(async (session) => {
+    recentSessions.slice(-5).map(async (session) => {
       const sets = await workoutRepo.getSessionSets(db, session.id);
       const exerciseDetails = await Promise.all(
-        [...new Set(sets.map(s => s.exercise_id))].map(id => exerciseRepo.getExerciseById(db, id)),
+        Array.from(new Set(sets.map(s => s.exercise_id)), id => exerciseRepo.getExerciseById(db, id)),
       );
       return {
         date: session.date,
@@ -67,7 +74,7 @@ export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[
   );
 
   const performanceTrend = await Promise.all(
-    recentSessions.slice(0, 5).map(async (session) => {
+    recentSessions.slice(-5).map(async (session) => {
       const sets = await workoutRepo.getSessionSets(db, session.id);
       const totalVolume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
       return { date: session.date, total_volume: totalVolume };
@@ -78,7 +85,8 @@ export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[
     recentSessions: sessionsWithExercises,
     performanceTrend,
   });
-  if (recoverySuggestion) suggestions.push(recoverySuggestion);
+  if (recoverySuggestion)
+    suggestions.push(recoverySuggestion);
 
   return suggestions.sort((a, b) => a.priority - b.priority);
 }

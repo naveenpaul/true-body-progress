@@ -1,4 +1,3 @@
-/* eslint-disable better-tailwindcss/no-unknown-classes */
 import * as React from 'react';
 import { View } from 'react-native';
 
@@ -16,7 +15,8 @@ type Props = {
 };
 
 export function SimpleChart({ data, height = 120, color = '#22C55E' }: Props) {
-  if (data.length < 2) return null;
+  if (data.length < 2)
+    return null;
 
   const values = data.map(d => d.value);
   const min = Math.min(...values);
@@ -38,7 +38,7 @@ export function SimpleChart({ data, height = 120, color = '#22C55E' }: Props) {
           const barHeight = ((point.value - min) / range) * (height - 30);
           return (
             <View key={i} className="flex-1 items-center">
-              <View className="flex-1 w-full items-center justify-end">
+              <View className="w-full flex-1 items-center justify-end">
                 <View
                   style={{
                     height: Math.max(barHeight, 2),

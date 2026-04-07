@@ -23,7 +23,8 @@ type BodyState = {
 };
 
 function requireDb(db: SQLiteDatabase | null): SQLiteDatabase {
-  if (!db) throw new Error('body store: db not initialized');
+  if (!db)
+    throw new Error('body store: db not initialized');
   return db;
 }
 

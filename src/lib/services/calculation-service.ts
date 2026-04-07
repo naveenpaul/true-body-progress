@@ -59,9 +59,11 @@ export function calculateMacroTargets(
 export function calculateWeeklyChange(
   weights: Array<{ date: string; weight: number }>,
 ): number | null {
-  if (weights.length < 2) return null;
-  const recent = weights[weights.length - 1].weight;
+  if (weights.length < 2)
+    return null;
+  const recent = weights.at(-1)!.weight;
   const weekAgo = weights.find((_, i) => i <= weights.length - 7);
-  if (!weekAgo) return recent - weights[0].weight;
+  if (!weekAgo)
+    return recent - weights[0].weight;
   return Math.round((recent - weekAgo.weight) * 10) / 10;
 }

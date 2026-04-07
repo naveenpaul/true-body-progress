@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { Exercise, WorkoutSession, WorkoutSetWithExercise } from '@/lib/types';
 
 import { create } from 'zustand';
+import { today } from '@/lib/dates';
 import * as exerciseRepo from '@/lib/db/exercise-repo';
 import * as workoutRepo from '@/lib/db/workout-repo';
 import { createSelectors } from '@/lib/utils';
@@ -27,9 +28,12 @@ type WorkoutState = {
   recentSessions: WorkoutSession[];
   exercises: Exercise[];
 
+  sessionsLimit: number;
+
   setDb: (db: SQLiteDatabase) => void;
   loadExercises: () => Promise<void>;
   loadRecentSessions: () => Promise<void>;
+  loadMoreSessions: () => Promise<void>;
   startWorkout: () => void;
   addExercise: (exerciseId: number) => Promise<void>;
   updateSet: (index: number, updates: Partial<ActiveSet>) => void;
@@ -42,7 +46,8 @@ type WorkoutState = {
 };
 
 function requireDb(db: SQLiteDatabase | null): SQLiteDatabase {
-  if (!db) throw new Error('workout store: db not initialized');
+  if (!db)
+    throw new Error('workout store: db not initialized');
   return db;
 }
 
@@ -53,6 +58,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeSets: [],
   recentSessions: [],
   exercises: [],
+  sessionsLimit: 20,
 
   setDb: (db) => {
     set({ db });
@@ -66,8 +72,16 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   loadRecentSessions: async () => {
     const db = requireDb(get().db);
-    const recentSessions = await workoutRepo.getRecentSessions(db, 20);
+    const limit = get().sessionsLimit;
+    const recentSessions = await workoutRepo.getRecentSessions(db, limit);
     set({ recentSessions });
+  },
+
+  loadMoreSessions: async () => {
+    const db = requireDb(get().db);
+    const nextLimit = get().sessionsLimit + 20;
+    const recentSessions = await workoutRepo.getRecentSessions(db, nextLimit);
+    set({ sessionsLimit: nextLimit, recentSessions });
   },
 
   startWorkout: () => {
@@ -77,7 +91,8 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   addExercise: async (exerciseId: number) => {
     const db = requireDb(get().db);
     const exercise = await exerciseRepo.getExerciseById(db, exerciseId);
-    if (!exercise) return;
+    if (!exercise)
+      return;
 
     const prevSets = await workoutRepo.getLastSetsForExercise(db, exerciseId);
     const numSets = Math.max(prevSets.length, 3);
@@ -112,7 +127,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   addSet: (exerciseId) => {
     set((state) => {
       const exerciseSets = state.activeSets.filter(s => s.exercise_id === exerciseId);
-      const lastSet = exerciseSets[exerciseSets.length - 1];
+      const lastSet = exerciseSets.at(-1);
       const newSet: ActiveSet = {
         exercise_id: exerciseId,
         exercise_name: lastSet?.exercise_name ?? '',
@@ -124,9 +139,16 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
         prev_reps: null,
         prev_weight: null,
       };
-      const lastIndex = state.activeSets.lastIndexOf(lastSet);
       const activeSets = [...state.activeSets];
-      activeSets.splice(lastIndex + 1, 0, newSet);
+      if (lastSet) {
+        // Insert directly after the last set of this exercise
+        const lastIndex = activeSets.lastIndexOf(lastSet);
+        activeSets.splice(lastIndex + 1, 0, newSet);
+      }
+      else {
+        // No existing sets for this exercise: append to the end
+        activeSets.push(newSet);
+      }
       return { activeSets };
     });
   },
@@ -139,8 +161,13 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   completeSet: (index) => {
     set((state) => {
+      const target = state.activeSets[index];
+      // Block completing empty sets — saveWorkout filters reps<=0 out, so allowing
+      // a ✓ tap on an empty row would silently drop it on save.
+      if (!target || target.reps <= 0)
+        return state;
       const activeSets = [...state.activeSets];
-      activeSets[index] = { ...activeSets[index], completed: true };
+      activeSets[index] = { ...target, completed: true };
       return { activeSets };
     });
   },
@@ -148,14 +175,15 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   saveWorkout: async () => {
     const db = requireDb(get().db);
     const state = get();
-    if (!state.startTime) return 0;
+    if (!state.startTime)
+      return 0;
 
     const durationSec = Math.floor((Date.now() - state.startTime) / 1000);
     const completedSets = state.activeSets.filter(s => s.completed && s.reps > 0);
 
     const sessionId = await workoutRepo.saveWorkout(
       db,
-      new Date().toISOString().split('T')[0],
+      today(),
       durationSec,
       completedSets.map(s => ({
         exercise_id: s.exercise_id,

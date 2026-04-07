@@ -8,7 +8,8 @@ type FatLossInput = {
 export function evaluateFatLoss(input: FatLossInput): Suggestion | null {
   const { weightTrend, waistTrend } = input;
 
-  if (weightTrend.length < 14 || waistTrend.length < 14) return null;
+  if (weightTrend.length < 14 || waistTrend.length < 14)
+    return null;
 
   const recentWeight = weightTrend.slice(-7);
   const olderWeight = weightTrend.slice(-14, -7);
@@ -63,6 +64,7 @@ export function evaluateFatLoss(input: FatLossInput): Suggestion | null {
 }
 
 function average(nums: number[]): number {
-  if (nums.length === 0) return 0;
+  if (nums.length === 0)
+    return 0;
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }

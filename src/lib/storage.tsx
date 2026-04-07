@@ -6,7 +6,8 @@ const cache = new Map<string, string>();
 let hydrated = false;
 
 export async function hydrateStorage() {
-  if (hydrated) return;
+  if (hydrated)
+    return;
   const keys = await AsyncStorage.getAllKeys();
   const entries = await AsyncStorage.multiGet(keys);
   for (const [key, value] of entries) {
@@ -28,7 +29,8 @@ export const storage = {
   },
   getBoolean(key: string): boolean | undefined {
     const v = cache.get(key);
-    if (v === undefined) return undefined;
+    if (v === undefined)
+      return undefined;
     return v === 'true';
   },
   setBoolean(key: string, value: boolean) {
@@ -43,7 +45,17 @@ export const storage = {
 
 export function getItem<T>(key: string): T | null {
   const value = storage.getString(key);
-  return value ? JSON.parse(value) || null : null;
+  if (!value)
+    return null;
+  try {
+    return (JSON.parse(value) as T) ?? null;
+  }
+  catch (err) {
+    // Corrupted/legacy value: drop it so subsequent reads aren't poisoned.
+    console.warn(`storage.getItem: failed to parse "${key}", clearing`, err);
+    storage.remove(key);
+    return null;
+  }
 }
 
 export async function setItem<T>(key: string, value: T) {
@@ -58,11 +70,12 @@ export async function removeItem(key: string) {
 const listeners = new Map<string, Set<() => void>>();
 
 function notify(key: string) {
-  listeners.get(key)?.forEach((fn) => fn());
+  listeners.get(key)?.forEach(fn => fn());
 }
 
 function subscribe(key: string, fn: () => void) {
-  if (!listeners.has(key)) listeners.set(key, new Set());
+  if (!listeners.has(key))
+    listeners.set(key, new Set());
   listeners.get(key)!.add(fn);
   return () => {
     listeners.get(key)?.delete(fn);

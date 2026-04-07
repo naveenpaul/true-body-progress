@@ -61,7 +61,8 @@ export async function seedExercises(db: SQLiteDatabase): Promise<void> {
   const count = await db.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) as count FROM exercise WHERE is_custom = 0',
   );
-  if (count && count.count > 0) return;
+  if (count && count.count > 0)
+    return;
 
   await db.withTransactionAsync(async () => {
     for (const ex of DEFAULT_EXERCISES) {

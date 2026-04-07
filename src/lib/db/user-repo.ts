@@ -38,9 +38,10 @@ export async function updateUser(
     }
   }
 
-  if (fields.length === 0) return;
+  if (fields.length === 0)
+    return;
 
-  fields.push("updated_at = datetime('now')");
+  fields.push('updated_at = datetime(\'now\')');
   await db.runAsync(
     `UPDATE user_profile SET ${fields.join(', ')} WHERE id = (SELECT id FROM user_profile LIMIT 1)`,
     values,

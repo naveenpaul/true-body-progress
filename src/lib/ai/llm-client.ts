@@ -27,7 +27,8 @@ type CoachingInput = {
 };
 
 export async function getCoachingSuggestion(input: CoachingInput): Promise<string | null> {
-  if (!config) return null;
+  if (!config)
+    return null;
 
   const prompt = buildPrompt(input);
 
@@ -54,7 +55,8 @@ export async function getCoachingSuggestion(input: CoachingInput): Promise<strin
       }),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok)
+      return null;
 
     const data = await response.json();
     const message = data.choices?.[0]?.message?.content;

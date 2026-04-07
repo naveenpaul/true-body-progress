@@ -5,11 +5,16 @@ import { Pressable, Text, View } from '@/components/ui';
 import { ArrowRight } from '@/components/ui/icons';
 
 type ItemProps = {
-  text: TxKeyPath;
+  text: TxKeyPath | (string & {});
   value?: string;
   onPress?: () => void;
   icon?: React.ReactNode;
 };
+
+// Heuristic: tx keys use dot notation ("settings.app_name"); raw labels do not.
+function isTxKey(s: string): s is TxKeyPath {
+  return s.includes('.');
+}
 
 export function SettingsItem({ text, value, icon, onPress }: ItemProps) {
   const isPressable = onPress !== undefined;
@@ -21,7 +26,7 @@ export function SettingsItem({ text, value, icon, onPress }: ItemProps) {
     >
       <View className="flex-row items-center">
         {icon && <View className="pr-2">{icon}</View>}
-        <Text tx={text} />
+        {isTxKey(text) ? <Text tx={text} /> : <Text>{text}</Text>}
       </View>
       <View className="flex-row items-center">
         <Text className="text-neutral-600 dark:text-white">{value}</Text>

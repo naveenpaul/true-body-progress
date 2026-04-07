@@ -1,8 +1,8 @@
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ThemeProvider } from '@react-navigation/native';
-import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import * as React from 'react';
 import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
@@ -36,12 +36,14 @@ SplashScreen.setOptions({ duration: 500, fade: true });
 // One-shot non-DB bootstrap (storage, theme, LLM)
 let bootstrapped = false;
 async function bootstrapNonDb() {
-  if (bootstrapped) return;
+  if (bootstrapped)
+    return;
   bootstrapped = true;
   await hydrateStorage();
   loadSelectedTheme();
   const key = process.env.EXPO_PUBLIC_OPENROUTER_KEY;
-  if (key) configureLLM(key, 'qwen/qwen3.6-plus:free');
+  if (key)
+    configureLLM(key, 'qwen/qwen3.6-plus:free');
 }
 
 export default function RootLayout() {
@@ -96,7 +98,8 @@ function DbBridge({ children }: { children: React.ReactNode }) {
       });
   }, [db, setUserDb, setBodyDb, setWorkoutDb, loadUser]);
 
-  if (!ready) return null;
+  if (!ready)
+    return null;
   return <>{children}</>;
 }
 

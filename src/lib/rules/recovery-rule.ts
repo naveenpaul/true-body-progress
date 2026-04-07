@@ -11,12 +11,13 @@ type RecoveryInput = {
 export function evaluateRecovery(input: RecoveryInput): Suggestion | null {
   const { recentSessions, performanceTrend } = input;
 
-  if (recentSessions.length === 0) return null;
+  if (recentSessions.length === 0)
+    return null;
 
   // Check for same muscle group trained < 48h apart
   if (recentSessions.length >= 2) {
-    const latest = recentSessions[recentSessions.length - 1];
-    const previous = recentSessions[recentSessions.length - 2];
+    const latest = recentSessions.at(-1)!;
+    const previous = recentSessions.at(-2)!;
     const hoursBetween
       = (new Date(latest.date).getTime() - new Date(previous.date).getTime()) / (1000 * 60 * 60);
 
@@ -47,7 +48,8 @@ export function evaluateRecovery(input: RecoveryInput): Suggestion | null {
   if (performanceTrend.length >= 3) {
     const last3 = performanceTrend.slice(-3);
     const declining = last3.every((session, i) => {
-      if (i === 0) return true;
+      if (i === 0)
+        return true;
       return session.total_volume < last3[i - 1].total_volume;
     });
 

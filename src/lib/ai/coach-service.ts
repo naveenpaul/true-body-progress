@@ -10,11 +10,13 @@ import { getAllSuggestions } from '@/lib/rules';
 import { getCoachingSuggestion, isLLMConfigured } from './llm-client';
 
 function describeTrend(values: number[]): string {
-  if (values.length < 2) return 'insufficient data';
+  if (values.length < 2)
+    return 'insufficient data';
   const first = values[0];
-  const last = values[values.length - 1];
+  const last = values.at(-1)!;
   const change = last - first;
-  if (Math.abs(change) < 0.3) return 'stable';
+  if (Math.abs(change) < 0.3)
+    return 'stable';
   return change > 0 ? 'increasing' : 'decreasing';
 }
 

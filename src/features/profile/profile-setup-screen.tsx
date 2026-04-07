@@ -1,4 +1,3 @@
-/* eslint-disable better-tailwindcss/no-unknown-classes */
 import type { Gender, GoalType, UnitSystem } from '@/lib/types';
 
 import { useRouter } from 'expo-router';
@@ -7,40 +6,83 @@ import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
+import { cmToInches, inchesToCm, kgToLbs, lbsToKg } from '@/lib/units';
 
 import { useUserStore } from './use-user-store';
 
 export function ProfileSetupScreen() {
   const router = useRouter();
   const user = useUserStore.use.user();
-  const store = useUserStore();
+  const createUser = useUserStore.use.createUser();
+  const updateProfile = useUserStore.use.updateProfile();
+
+  // Editable values are stored in the user's currently-selected unit system,
+  // then converted back to metric on save.
+  const initialUnits: UnitSystem = user?.preferred_units ?? 'metric';
+  const [units, setUnits] = useState<UnitSystem>(initialUnits);
+
+  const initialHeight = user?.height_cm
+    ? (initialUnits === 'imperial' ? cmToInches(user.height_cm) : user.height_cm)
+    : '';
+  const initialTargetWeight = user?.target_weight
+    ? (initialUnits === 'imperial' ? kgToLbs(user.target_weight) : user.target_weight)
+    : '';
 
   const [name, setName] = useState(user?.name ?? '');
-  const [height, setHeight] = useState(user?.height_cm ? String(user.height_cm) : '');
+  const [height, setHeight] = useState(initialHeight ? String(initialHeight) : '');
   const [age, setAge] = useState(user?.age ? String(user.age) : '');
   const [gender, setGender] = useState<Gender>(user?.gender ?? 'male');
   const [goalType, setGoalType] = useState<GoalType>(user?.goal_type ?? 'fat_loss');
-  const [targetWeight, setTargetWeight] = useState(user?.target_weight ? String(user.target_weight) : '');
-  const [units, setUnits] = useState<UnitSystem>(user?.preferred_units ?? 'metric');
+  const [targetWeight, setTargetWeight] = useState(initialTargetWeight ? String(initialTargetWeight) : '');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const heightLabel = units === 'imperial' ? 'Height (in)' : 'Height (cm)';
+  const targetWeightLabel = units === 'imperial' ? 'Target weight (lbs)' : 'Target weight (kg)';
 
   const handleSave = async () => {
-    const h = parseFloat(height);
-    const a = parseInt(age, 10);
-    const tw = parseFloat(targetWeight);
-    if (!name || isNaN(h) || isNaN(a) || isNaN(tw)) return;
+    const parseNum = (s: string) => Number.parseFloat(s.replace(',', '.'));
+    const h = parseNum(height);
+    const a = Number.parseInt(age, 10);
+    const tw = parseNum(targetWeight);
+    if (!name || Number.isNaN(h) || Number.isNaN(a) || Number.isNaN(tw)) {
+      setSaveError('All fields are required and must be valid numbers');
+      return;
+    }
+    if (h <= 0 || a <= 0 || tw <= 0) {
+      setSaveError('Height, age, and target weight must be positive');
+      return;
+    }
 
+    // Convert editable inputs back to metric for storage.
+    const heightCm = units === 'imperial' ? inchesToCm(h) : h;
+    const targetWeightKg = units === 'imperial' ? lbsToKg(tw) : tw;
+
+    setSaveError(null);
     setSaving(true);
-    if (!user) {
-      await store.createUser(name, h, a, gender, goalType, tw, units);
-    }
-    else {
-      if (units !== user.preferred_units) {
-        await store.updateUnits(units);
+    try {
+      if (!user) {
+        await createUser(name, heightCm, a, gender, goalType, targetWeightKg, units);
       }
+      else {
+        await updateProfile({
+          name,
+          height_cm: heightCm,
+          age: a,
+          gender,
+          goal_type: goalType,
+          target_weight: targetWeightKg,
+          preferred_units: units,
+        });
+      }
+      router.back();
     }
-    setSaving(false);
-    router.back();
+    catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save profile');
+    }
+    finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -50,17 +92,17 @@ export function ProfileSetupScreen() {
       </Text>
 
       <InputField label="Name" value={name} onChangeText={setName} />
-      <InputField label="Height (cm)" value={height} onChangeText={setHeight} keyboardType="numeric" />
+      <InputField label={heightLabel} value={height} onChangeText={setHeight} keyboardType="numeric" />
       <InputField label="Age" value={age} onChangeText={setAge} keyboardType="numeric" />
 
-      <Text className="mb-2 mt-2 text-sm text-charcoal-400">Gender</Text>
+      <Text className="my-2 text-sm text-charcoal-400">Gender</Text>
       <SegmentedControl
         options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]}
         selected={gender}
         onSelect={v => setGender(v as Gender)}
       />
 
-      <Text className="mb-2 mt-4 text-sm text-charcoal-400">Goal</Text>
+      <Text className="mt-4 mb-2 text-sm text-charcoal-400">Goal</Text>
       <SegmentedControl
         options={[
           { value: 'fat_loss', label: 'Fat Loss' },
@@ -71,17 +113,37 @@ export function ProfileSetupScreen() {
         onSelect={v => setGoalType(v as GoalType)}
       />
 
-      <InputField label="Target weight (kg)" value={targetWeight} onChangeText={setTargetWeight} keyboardType="numeric" />
+      <InputField label={targetWeightLabel} value={targetWeight} onChangeText={setTargetWeight} keyboardType="numeric" />
 
-      <Text className="mb-2 mt-4 text-sm text-charcoal-400">Units</Text>
+      <Text className="mt-4 mb-2 text-sm text-charcoal-400">Units</Text>
       <SegmentedControl
         options={[
           { value: 'metric', label: 'Metric (kg/cm)' },
           { value: 'imperial', label: 'Imperial (lbs/in)' },
         ]}
         selected={units}
-        onSelect={v => setUnits(v as UnitSystem)}
+        onSelect={(v) => {
+          const next = v as UnitSystem;
+          if (next === units)
+            return;
+          // Convert the currently-displayed numeric values into the new unit system
+          // so the user doesn't have to retype them.
+          const parseNum = (s: string) => Number.parseFloat(s.replace(',', '.'));
+          const h = parseNum(height);
+          if (!Number.isNaN(h)) {
+            setHeight(String(next === 'imperial' ? cmToInches(h) : inchesToCm(h)));
+          }
+          const tw = parseNum(targetWeight);
+          if (!Number.isNaN(tw)) {
+            setTargetWeight(String(next === 'imperial' ? kgToLbs(tw) : lbsToKg(tw)));
+          }
+          setUnits(next);
+        }}
       />
+
+      {saveError && (
+        <Text className="mt-2 text-sm text-danger-500">{saveError}</Text>
+      )}
 
       <Button
         label={saving ? 'Saving...' : (user ? 'Save Changes' : 'Create Profile')}
@@ -124,7 +186,8 @@ function SegmentedControl({ options, selected, onSelect }: {
         >
           <Text className={`text-sm ${
             selected === opt.value ? 'font-bold text-black' : 'text-charcoal-300'
-          }`}>
+          }`}
+          >
             {opt.label}
           </Text>
         </Pressable>
