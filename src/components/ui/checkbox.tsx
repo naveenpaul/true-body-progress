@@ -21,6 +21,8 @@ const THUMB_HEIGHT = 22;
 const THUMB_WIDTH = 22;
 const THUMB_OFFSET = 4;
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
 export type RootProps = {
   onChange: (checked: boolean) => void;
   checked?: boolean;
@@ -78,6 +80,10 @@ export function CheckboxIcon({ checked = false }: IconProps) {
   const anim = useRef(new Animated.Value(checked ? 1 : 0)).current;
 
   useEffect(() => {
+    if (isTestEnv) {
+      anim.setValue(checked ? 1 : 0);
+      return;
+    }
     Animated.timing(anim, {
       toValue: checked ? 1 : 0,
       duration: 100,
@@ -157,6 +163,10 @@ export function RadioIcon({ checked = false }: IconProps) {
   const anim = useRef(new Animated.Value(checked ? 1 : 0)).current;
 
   useEffect(() => {
+    if (isTestEnv) {
+      anim.setValue(checked ? 1 : 0);
+      return;
+    }
     Animated.timing(anim, {
       toValue: checked ? 1 : 0,
       duration: 100,
@@ -232,6 +242,10 @@ export function SwitchIcon({ checked = false }: IconProps) {
   const backgroundColor = checked ? colors.primary[300] : colors.charcoal[400];
 
   useEffect(() => {
+    if (isTestEnv) {
+      anim.setValue(translateVal);
+      return;
+    }
     Animated.spring(anim, {
       toValue: translateVal,
       overshootClamping: true,

@@ -1,19 +1,18 @@
 import type { NutritionEntry } from '@/lib/types';
 
-import { useSQLiteContext } from 'expo-sqlite';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
 import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
 import { today } from '@/lib/dates';
+import { expoDb } from '@/lib/db';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { calculateMacroTargets, calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 
 export function NutritionScreen() {
-  const db = useSQLiteContext();
   const user = useUserStore.use.user();
   const latest = useBodyStore.use.latest();
 
@@ -43,12 +42,12 @@ export function NutritionScreen() {
 
   const loadData = useCallback(async () => {
     const [dayMeals, dayTotals] = await Promise.all([
-      nutritionRepo.getMealsForDate(db, currentDate),
-      nutritionRepo.getDailyTotals(db, currentDate),
+      nutritionRepo.getMealsForDate(expoDb, currentDate),
+      nutritionRepo.getDailyTotals(expoDb, currentDate),
     ]);
     setMeals(dayMeals);
     setTotals(dayTotals);
-  }, [db, currentDate]);
+  }, [currentDate]);
 
   useEffect(() => {
     loadData();
@@ -88,7 +87,7 @@ export function NutritionScreen() {
     setSaving(true);
     try {
       await nutritionRepo.logMeal(
-        db,
+        expoDb,
         currentDate,
         mealName.trim(),
         cal,
@@ -113,12 +112,16 @@ export function NutritionScreen() {
   };
 
   const handleDelete = async (id: number) => {
-    await nutritionRepo.deleteMeal(db, id);
+    await nutritionRepo.deleteMeal(expoDb, id);
     await loadData();
   };
 
   return (
-    <ScrollView className="flex-1 bg-charcoal-950" contentContainerClassName="p-4 pb-10 pt-14">
+    <ScrollView
+      className="flex-1 bg-charcoal-950"
+      contentContainerClassName="p-4 pb-10 pt-14"
+      refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
+    >
       <Text className="mb-4 text-2xl font-bold text-white">Nutrition</Text>
 
       {/* Daily Summary - Macro Bars */}

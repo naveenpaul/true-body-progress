@@ -62,8 +62,22 @@ export function calculateWeeklyChange(
   if (weights.length < 2)
     return null;
   const recent = weights.at(-1)!.weight;
-  const weekAgo = weights.find((_, i) => i <= weights.length - 7);
-  if (!weekAgo)
-    return recent - weights[0].weight;
-  return Math.round((recent - weekAgo.weight) * 10) / 10;
+  const parseLocalYMD = (dateStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, (month ?? 1) - 1, day ?? 1);
+  };
+  const formatLocalYMD = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+  const recentDate = parseLocalYMD(weights.at(-1)!.date);
+  const sevenDaysAgo = new Date(recentDate);
+  sevenDaysAgo.setDate(recentDate.getDate() - 7);
+  const threshold = formatLocalYMD(sevenDaysAgo);
+
+  const weekAgo = [...weights]
+    .reverse()
+    .find(entry => entry.date <= threshold);
+
+  const baseline = weekAgo?.weight ?? weights[0].weight;
+  return Math.round((recent - baseline) * 10) / 10;
 }

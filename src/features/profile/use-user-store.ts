@@ -1,16 +1,13 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
-
 import type { Gender, GoalType, UnitSystem, User } from '@/lib/types';
 
 import { create } from 'zustand';
+import { expoDb } from '@/lib/db';
 import * as userRepo from '@/lib/db/user-repo';
 import { createSelectors } from '@/lib/utils';
 
 type UserState = {
-  db: SQLiteDatabase | null;
   user: User | null;
   loading: boolean;
-  setDb: (db: SQLiteDatabase) => void;
   loadUser: () => Promise<void>;
   createUser: (
     name: string,
@@ -33,46 +30,31 @@ type UserState = {
   }) => Promise<void>;
 };
 
-function requireDb(db: SQLiteDatabase | null): SQLiteDatabase {
-  if (!db)
-    throw new Error('user store: db not initialized');
-  return db;
-}
-
-const _useUserStore = create<UserState>((set, get) => ({
-  db: null,
+const _useUserStore = create<UserState>(set => ({
   user: null,
   loading: true,
 
-  setDb: (db) => {
-    set({ db });
-  },
-
   loadUser: async () => {
-    const db = requireDb(get().db);
     set({ loading: true });
-    const user = await userRepo.getUser(db);
+    const user = await userRepo.getUser(expoDb);
     set({ user, loading: false });
   },
 
   createUser: async (name, heightCm, age, gender, goalType, targetWeight, preferredUnits) => {
-    const db = requireDb(get().db);
-    await userRepo.createUser(db, name, heightCm, age, gender, goalType, targetWeight, preferredUnits);
-    const user = await userRepo.getUser(db);
+    await userRepo.createUser(expoDb, name, heightCm, age, gender, goalType, targetWeight, preferredUnits);
+    const user = await userRepo.getUser(expoDb);
     set({ user });
   },
 
   updateUnits: async (units) => {
-    const db = requireDb(get().db);
-    await userRepo.updateUser(db, { preferred_units: units });
-    const user = await userRepo.getUser(db);
+    await userRepo.updateUser(expoDb, { preferred_units: units });
+    const user = await userRepo.getUser(expoDb);
     set({ user });
   },
 
   updateProfile: async (updates) => {
-    const db = requireDb(get().db);
-    await userRepo.updateUser(db, updates);
-    const user = await userRepo.getUser(db);
+    await userRepo.updateUser(expoDb, updates);
+    const user = await userRepo.getUser(expoDb);
     set({ user });
   },
 }));

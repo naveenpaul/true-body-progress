@@ -5,24 +5,30 @@ import type { WorkoutSession, WorkoutSet, WorkoutSetWithExercise } from '@/lib/t
 export async function saveWorkout(
   db: SQLiteDatabase,
   date: string,
-  durationSec: number,
-  sets: Array<{ exercise_id: number; set_number: number; reps: number; weight: number; rpe: number | null }>,
+  sets: Array<{
+    exercise_id: number;
+    set_number: number;
+    reps: number;
+    weight: number;
+    rpe: number | null;
+    rest_time_sec: number | null;
+  }>,
   notes?: string,
 ): Promise<number> {
   let sessionId = 0;
 
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
-      'INSERT INTO workout_session (date, duration, notes) VALUES (?, ?, ?)',
-      [date, durationSec, notes ?? null],
+      'INSERT INTO workout_session (date, notes) VALUES (?, ?)',
+      [date, notes ?? null],
     );
     sessionId = result.lastInsertRowId;
 
     for (const set of sets) {
       await db.runAsync(
-        `INSERT INTO workout_set (session_id, exercise_id, set_number, reps, weight, rpe)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [sessionId, set.exercise_id, set.set_number, set.reps, set.weight, set.rpe],
+        `INSERT INTO workout_set (session_id, exercise_id, set_number, reps, weight, rpe, rest_time_sec)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [sessionId, set.exercise_id, set.set_number, set.reps, set.weight, set.rpe, set.rest_time_sec],
       );
     }
   });
@@ -30,9 +36,22 @@ export async function saveWorkout(
   return sessionId;
 }
 
-export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10): Promise<WorkoutSession[]> {
-  return db.getAllAsync<WorkoutSession>(
-    'SELECT * FROM workout_session ORDER BY date DESC LIMIT ?',
+export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10): Promise<Array<WorkoutSession & { set_count: number; exercise_names: string | null }>> {
+  return db.getAllAsync(
+    `SELECT s.*,
+            COUNT(ws.id) as set_count,
+            (SELECT GROUP_CONCAT(name, ', ') FROM (
+               SELECT DISTINCT e.name
+               FROM workout_set ws2
+               JOIN exercise e ON ws2.exercise_id = e.id
+               WHERE ws2.session_id = s.id
+               ORDER BY ws2.set_number
+             )) as exercise_names
+     FROM workout_session s
+     LEFT JOIN workout_set ws ON ws.session_id = s.id
+     GROUP BY s.id
+     ORDER BY s.date DESC, s.id DESC
+     LIMIT ?`,
     [limit],
   );
 }
@@ -125,4 +144,43 @@ export async function getStrengthTrend(
 
 export async function deleteSession(db: SQLiteDatabase, sessionId: number): Promise<void> {
   await db.runAsync('DELETE FROM workout_session WHERE id = ?', [sessionId]);
+}
+
+// Aggregate workout activity over the last N days.
+// Used by coach service to summarize training load for the LLM.
+export async function getWorkoutSummary(
+  db: SQLiteDatabase,
+  days: number = 28,
+): Promise<{
+  session_count: number;
+  total_volume: number;
+  total_sets: number;
+  top_exercises: string | null;
+}> {
+  const result = await db.getFirstAsync<{
+    session_count: number;
+    total_volume: number;
+    total_sets: number;
+    top_exercises: string | null;
+  }>(
+    `SELECT
+       COUNT(DISTINCT s.id) as session_count,
+       COALESCE(SUM(ws.weight * ws.reps), 0) as total_volume,
+       COUNT(ws.id) as total_sets,
+       (SELECT GROUP_CONCAT(name, ', ') FROM (
+          SELECT e.name, COUNT(ws2.id) as cnt
+          FROM workout_set ws2
+          JOIN workout_session s2 ON ws2.session_id = s2.id
+          JOIN exercise e ON ws2.exercise_id = e.id
+          WHERE s2.date >= date('now', '-' || ? || ' days')
+          GROUP BY e.id
+          ORDER BY cnt DESC
+          LIMIT 5
+        )) as top_exercises
+     FROM workout_session s
+     LEFT JOIN workout_set ws ON ws.session_id = s.id
+     WHERE s.date >= date('now', '-' || ? || ' days')`,
+    [days, days],
+  );
+  return result ?? { session_count: 0, total_volume: 0, total_sets: 0, top_exercises: null };
 }

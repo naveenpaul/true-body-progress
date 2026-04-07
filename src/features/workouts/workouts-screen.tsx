@@ -1,22 +1,36 @@
 import type { WorkoutSetWithExercise } from '@/lib/types';
 
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useReducer, useState } from 'react';
+import { FlatList, Modal, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
 import { useUserStore } from '@/features/profile/use-user-store';
-import { formatDuration, formatRelativeDate } from '@/lib/dates';
+import { formatRelativeDate } from '@/lib/dates';
 import { formatWeight, kgToLbs, lbsToKg } from '@/lib/units';
 
 import { useWorkoutStore } from './use-workout-store';
 
+function sessionSetsReducer(
+  _: WorkoutSetWithExercise[],
+  action:
+    | { type: 'clear' }
+    | { type: 'replace'; sets: WorkoutSetWithExercise[] },
+): WorkoutSetWithExercise[] {
+  switch (action.type) {
+    case 'clear':
+      return [];
+    case 'replace':
+      return action.sets;
+  }
+}
+
+// eslint-disable-next-line max-lines-per-function
 export function WorkoutsScreen() {
   const user = useUserStore.use.user();
   const units = user?.preferred_units ?? 'metric';
   const isActive = useWorkoutStore.use.isActive();
   const activeSets = useWorkoutStore.use.activeSets();
-  const startTime = useWorkoutStore.use.startTime();
   const exercises = useWorkoutStore.use.exercises();
   const recentSessions = useWorkoutStore.use.recentSessions();
   const sessionsLimit = useWorkoutStore.use.sessionsLimit();
@@ -29,14 +43,19 @@ export function WorkoutsScreen() {
   const addExercise = useWorkoutStore.use.addExercise();
   const addSet = useWorkoutStore.use.addSet();
   const updateSet = useWorkoutStore.use.updateSet();
-  const completeSet = useWorkoutStore.use.completeSet();
   const getSessionSets = useWorkoutStore.use.getSessionSets();
+  const copyFirstSetToAll = useWorkoutStore.use.copyFirstSetToAll();
+  const restDuration = useWorkoutStore.use.restDuration();
+  const restEndsAt = useWorkoutStore.use.restEndsAt();
+  const startRest = useWorkoutStore.use.startRest();
+  const cancelRest = useWorkoutStore.use.cancelRest();
+  const setRestDuration = useWorkoutStore.use.setRestDuration();
 
   const [showPicker, setShowPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
   const [expandedSession, setExpandedSession] = useState<number | null>(null);
-  const [sessionSets, setSessionSets] = useState<WorkoutSetWithExercise[]>([]);
+  const [sessionSets, dispatchSessionSets] = useReducer(sessionSetsReducer, []);
   const [nowTick, setNowTick] = useState(() => Date.now());
   // Draft mirror for the currently-focused numeric input. Only one input is focused
   // at a time, so a single key/value is enough — no stale-key problems when sets
@@ -46,17 +65,41 @@ export function WorkoutsScreen() {
     inputDraft?.key === key ? inputDraft.value : fallback;
   const setDraft = (key: string, value: string) => setInputDraft({ key, value });
   const clearDraft = () => setInputDraft(null);
+  const clearSessionSets = useCallback(
+    () => dispatchSessionSets({ type: 'clear' }),
+    [],
+  );
+  const replaceSessionSets = useCallback(
+    (sets: WorkoutSetWithExercise[]) => dispatchSessionSets({ type: 'replace', sets }),
+    [],
+  );
   const parseDraftNum = (s: string): number => {
     const n = Number.parseFloat(s.replace(',', '.'));
     return Number.isNaN(n) ? 0 : n;
   };
 
+  // Tick once a second only while a rest countdown is running.
   useEffect(() => {
-    if (!isActive || !startTime)
+    if (!restEndsAt)
       return;
     const id = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [isActive, startTime]);
+  }, [restEndsAt]);
+
+  // Auto-clear the rest timer when it elapses so the floating bar disappears.
+  useEffect(() => {
+    if (!restEndsAt)
+      return;
+    const remaining = restEndsAt - Date.now();
+    if (remaining <= 0) {
+      cancelRest();
+      return;
+    }
+    const id = setTimeout(cancelRest, remaining);
+    return () => clearTimeout(id);
+  }, [restEndsAt, cancelRest]);
+
+  const restRemaining = restEndsAt ? Math.max(0, Math.ceil((restEndsAt - nowTick) / 1000)) : 0;
 
   const loadData = useCallback(() => {
     loadExercises();
@@ -70,21 +113,19 @@ export function WorkoutsScreen() {
   useEffect(() => {
     if (!expandedSession) {
       // Clear stale data when collapsing so the next expand never flashes the previous session.
-      setSessionSets([]);
+      clearSessionSets();
       return;
     }
     let cancelled = false;
-    setSessionSets([]);
+    clearSessionSets();
     getSessionSets(expandedSession).then((sets) => {
       if (!cancelled)
-        setSessionSets(sets);
+        replaceSessionSets(sets);
     });
     return () => {
       cancelled = true;
     };
-  }, [expandedSession, getSessionSets]);
-
-  const elapsedSec = startTime ? Math.floor((nowTick - startTime) / 1000) : 0;
+  }, [clearSessionSets, expandedSession, getSessionSets, replaceSessionSets]);
 
   const filteredExercises = exercises.filter((e) => {
     const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -109,8 +150,8 @@ export function WorkoutsScreen() {
   }, []);
 
   const handleSave = async () => {
-    const completedCount = activeSets.filter(s => s.completed).length;
-    if (completedCount === 0)
+    const validCount = activeSets.filter(s => s.reps > 0).length;
+    if (validCount === 0)
       return;
     await saveWorkout();
     await loadRecentSessions();
@@ -121,10 +162,7 @@ export function WorkoutsScreen() {
       <View className="flex-1 bg-charcoal-950">
         {/* Active Header */}
         <View className="flex-row items-center justify-between bg-charcoal-900 px-4 pt-14 pb-4">
-          <View>
-            <Text className="text-xl font-bold text-white">Active Workout</Text>
-            <Text className="text-sm text-charcoal-400">{formatDuration(elapsedSec)}</Text>
-          </View>
+          <Text className="text-xl font-bold text-white">Active Workout</Text>
           <View className="flex-row gap-2">
             <Button label="Cancel" variant="outline" size="sm" onPress={cancelWorkout} className="border-danger-500" textClassName="text-danger-500" />
             <Button label="Save" size="sm" onPress={handleSave} className="bg-success-500" textClassName="text-black font-bold" />
@@ -134,15 +172,24 @@ export function WorkoutsScreen() {
         <ScrollView contentContainerClassName="p-4 pb-20">
           {exerciseGroups.map(group => (
             <View key={group.exerciseId} className="mb-6">
-              <Text className="mb-2 text-base font-bold text-white">{group.exerciseName}</Text>
+              <View className="mb-2 flex-row items-center justify-between">
+                <Text className="text-base font-bold text-white">{group.exerciseName}</Text>
+                {group.sets.length > 1 && (
+                  <Pressable
+                    onPress={() => copyFirstSetToAll(group.exerciseId)}
+                    className="rounded-md bg-charcoal-800 px-3 py-1"
+                  >
+                    <Text className="text-xs text-charcoal-200">Fill from set 1</Text>
+                  </Pressable>
+                )}
+              </View>
 
               {/* Header */}
               <View className="mb-1 flex-row items-center px-2">
-                <Text className="flex-[0.5] text-center text-xs font-bold text-charcoal-400">Set</Text>
+                <Text className="w-10 text-center text-xs font-bold text-charcoal-400">Set</Text>
                 <Text className="flex-1 text-center text-xs font-bold text-charcoal-400">Previous</Text>
-                <Text className="flex-1 text-center text-xs font-bold text-charcoal-400">{units === 'imperial' ? 'lbs × reps' : 'kg × reps'}</Text>
-                <Text className="flex-[0.5] text-center text-xs font-bold text-charcoal-400">RPE</Text>
-                <View className="w-10" />
+                <Text className="w-20 text-center text-xs font-bold text-charcoal-400">{units === 'imperial' ? 'lbs' : 'kg'}</Text>
+                <Text className="w-20 text-center text-xs font-bold text-charcoal-400">reps</Text>
               </View>
 
               {group.sets.map((set) => {
@@ -150,15 +197,15 @@ export function WorkoutsScreen() {
                 return (
                   <View
                     key={globalIndex}
-                    className={`mb-0.5 flex-row items-center rounded-lg p-2 ${set.completed ? 'bg-success-500/20' : ''}`}
+                    className="mb-0.5 flex-row items-center rounded-lg p-2"
                   >
-                    <Text className="flex-[0.5] text-center text-sm text-white">{set.set_number}</Text>
+                    <Text className="w-8 text-center text-sm text-white">{set.set_number}</Text>
                     <Text className="flex-1 text-center text-sm text-charcoal-400">
                       {set.prev_weight != null && set.prev_reps != null
                         ? `${units === 'imperial' ? kgToLbs(set.prev_weight) : set.prev_weight}×${set.prev_reps}`
                         : '-'}
                     </Text>
-                    <View className="flex-1 flex-row items-center justify-center">
+                    <View className="w-16 items-center">
                       <TextInput
                         keyboardType="numeric"
                         value={draftFor(
@@ -171,10 +218,11 @@ export function WorkoutsScreen() {
                           updateSet(globalIndex, { weight: units === 'imperial' ? lbsToKg(n) : n });
                         }}
                         onBlur={clearDraft}
-                        className="h-9 w-10 rounded-md bg-charcoal-900 text-center text-sm text-white"
+                        className="h-10 w-14 rounded-md bg-charcoal-900 text-center text-base text-white"
                         placeholderTextColor="#7D7D7D"
                       />
-                      <Text className="mx-1 text-charcoal-400">×</Text>
+                    </View>
+                    <View className="w-16 items-center">
                       <TextInput
                         keyboardType="numeric"
                         value={draftFor(`${globalIndex}-reps`, set.reps > 0 ? String(set.reps) : '')}
@@ -183,31 +231,10 @@ export function WorkoutsScreen() {
                           updateSet(globalIndex, { reps: parseDraftNum(v) });
                         }}
                         onBlur={clearDraft}
-                        className="h-9 w-10 rounded-md bg-charcoal-900 text-center text-sm text-white"
+                        className="h-10 w-14 rounded-md bg-charcoal-900 text-center text-base text-white"
                         placeholderTextColor="#7D7D7D"
                       />
                     </View>
-                    <TextInput
-                      keyboardType="numeric"
-                      value={draftFor(`${globalIndex}-rpe`, set.rpe ? String(set.rpe) : '')}
-                      onChangeText={(v) => {
-                        setDraft(`${globalIndex}-rpe`, v);
-                        const n = parseDraftNum(v);
-                        updateSet(globalIndex, { rpe: n > 0 ? n : null });
-                      }}
-                      onBlur={clearDraft}
-                      placeholder="-"
-                      className="h-9 w-10 flex-[0.5] rounded-md bg-charcoal-900 text-center text-sm text-white"
-                      placeholderTextColor="#7D7D7D"
-                    />
-                    <Pressable
-                      onPress={() => completeSet(globalIndex)}
-                      className="ml-1 size-8 items-center justify-center"
-                    >
-                      <Text className={set.completed ? 'text-lg text-success-500' : 'text-lg text-charcoal-500'}>
-                        {set.completed ? '✓' : '○'}
-                      </Text>
-                    </Pressable>
                   </View>
                 );
               })}
@@ -226,6 +253,52 @@ export function WorkoutsScreen() {
             textClassName="text-success-500"
           />
         </ScrollView>
+
+        {/* Rest timer floating bar */}
+        {restEndsAt
+          ? (
+              <View className="absolute inset-x-4 bottom-4 flex-row items-center justify-between rounded-xl bg-success-500 px-4 py-3 shadow-lg">
+                <Text className="text-base font-bold text-black">
+                  Rest:
+                  {' '}
+                  {Math.floor(restRemaining / 60)}
+                  :
+                  {String(restRemaining % 60).padStart(2, '0')}
+                </Text>
+                <Pressable onPress={cancelRest}>
+                  <Text className="text-sm font-semibold text-black">Skip</Text>
+                </Pressable>
+              </View>
+            )
+          : (
+              <View className="absolute inset-x-4 bottom-4 flex-row items-center justify-between rounded-xl bg-charcoal-900 px-4 py-3">
+                <View className="flex-row items-center gap-3">
+                  <Pressable
+                    onPress={() => setRestDuration(restDuration - 15)}
+                    className="size-7 items-center justify-center rounded-full bg-charcoal-800"
+                  >
+                    <Text className="text-base text-white">−</Text>
+                  </Pressable>
+                  <Text className="w-12 text-center text-sm font-semibold text-white">
+                    {Math.floor(restDuration / 60)}
+                    :
+                    {String(restDuration % 60).padStart(2, '0')}
+                  </Text>
+                  <Pressable
+                    onPress={() => setRestDuration(restDuration + 15)}
+                    className="size-7 items-center justify-center rounded-full bg-charcoal-800"
+                  >
+                    <Text className="text-base text-white">+</Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  onPress={startRest}
+                  className="rounded-lg bg-success-500 px-4 py-2"
+                >
+                  <Text className="text-sm font-bold text-black">Rest between sets</Text>
+                </Pressable>
+              </View>
+            )}
 
         {/* Exercise Picker Modal */}
         <Modal visible={showPicker} animationType="slide" transparent>
@@ -299,7 +372,10 @@ export function WorkoutsScreen() {
   // History view
   return (
     <View className="flex-1 bg-charcoal-950">
-      <ScrollView contentContainerClassName="p-4 pb-20 pt-14">
+      <ScrollView
+        contentContainerClassName="p-4 pb-20 pt-14"
+        refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
+      >
         <Text className="mb-4 text-2xl font-bold text-white">Workouts</Text>
 
         {recentSessions.length === 0
@@ -322,16 +398,27 @@ export function WorkoutsScreen() {
                 >
                   <View className="flex-row items-center justify-between">
                     <Text className="text-base font-medium text-white">{formatRelativeDate(session.date)}</Text>
-                    <Text className="text-xs text-charcoal-400">{formatDuration(session.duration)}</Text>
+                    {session.set_count != null && session.set_count > 0 && (
+                      <Text className="text-xs text-charcoal-400">
+                        {session.set_count}
+                        {' '}
+                        {session.set_count === 1 ? 'set' : 'sets'}
+                      </Text>
+                    )}
                   </View>
-                  {expandedSession === session.id && sessionSets.map((set, i) => (
-                    <Text key={i} className="mt-1 text-sm text-charcoal-200">
+                  {session.exercise_names && (
+                    <Text className="mt-1 text-sm text-charcoal-300" numberOfLines={2}>
+                      {session.exercise_names}
+                    </Text>
+                  )}
+                  {expandedSession === session.id && sessionSets.map(set => (
+                    <Text key={set.id} className="mt-1 text-sm text-charcoal-200">
                       {set.exercise_name}
                       :
                       {formatWeight(set.weight, units).split(' ')[0]}
                       ×
                       {set.reps}
-                      {set.rpe ? ` @${set.rpe}` : ''}
+                      {set.rest_time_sec ? ` · ${set.rest_time_sec}s rest` : ''}
                     </Text>
                   ))}
                 </Pressable>

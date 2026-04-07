@@ -69,6 +69,19 @@ jest.mock('expo-localization', () => ({
   ]),
 }));
 
+// Mock expo-sqlite — native module, can't open a real DB in jest.
+// Tests that need DB behavior should mock at the call site.
+jest.mock('expo-sqlite', () => ({
+  openDatabaseSync: jest.fn(() => ({
+    execSync: jest.fn(),
+    execAsync: jest.fn(() => Promise.resolve()),
+    getFirstAsync: jest.fn(() => Promise.resolve(null)),
+    getAllAsync: jest.fn(() => Promise.resolve([])),
+    runAsync: jest.fn(() => Promise.resolve({ lastInsertRowId: 0, changes: 0 })),
+    withTransactionAsync: jest.fn(async (fn: any) => fn()),
+  })),
+}));
+
 // Mock @react-native-async-storage/async-storage
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(() => Promise.resolve()),

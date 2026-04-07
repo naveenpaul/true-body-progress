@@ -34,10 +34,10 @@ export function SimpleChart({ data, height = 120, color = '#22C55E' }: Props) {
 
       {/* Bars */}
       <View className="flex-1 flex-row items-end pb-4">
-        {data.map((point, i) => {
+        {data.map((point) => {
           const barHeight = ((point.value - min) / range) * (height - 30);
           return (
-            <View key={i} className="flex-1 items-center">
+            <View key={`${point.label}-${point.value}`} className="flex-1 items-center">
               <View className="w-full flex-1 items-center justify-end">
                 <View
                   style={{

@@ -1,29 +1,54 @@
+import type { ErrorBoundaryProps } from 'expo-router';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { ThemeProvider } from '@react-navigation/native';
+import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import * as React from 'react';
 import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import FlashMessage from 'react-native-flash-message';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
+import { Text } from '@/components/ui';
 import { useThemeConfig } from '@/components/ui/use-theme-config';
-import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
-import { useWorkoutStore } from '@/features/workouts/use-workout-store';
 import { configureLLM } from '@/lib/ai/llm-client';
 import { APIProvider } from '@/lib/api';
-import { migrate } from '@/lib/db/database';
+import { db, expoDb } from '@/lib/db';
 import { seedExercises } from '@/lib/db/seed';
 import { loadSelectedTheme } from '@/lib/hooks/use-selected-theme';
+import { loadSelectedLanguage } from '@/lib/i18n';
 import { hydrateStorage } from '@/lib/storage';
+import migrations from '../../drizzle/migrations';
 
 import '../global.css';
 
-export { ErrorBoundary } from 'expo-router';
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
+  return (
+    <View className="flex-1 items-center justify-center bg-charcoal-950 px-6">
+      <Text className="mb-3 text-center text-xl font-bold text-white">
+        Startup failed
+      </Text>
+      <Text className="mb-6 text-center text-sm text-charcoal-300">
+        {error.message}
+      </Text>
+      <Pressable
+        onPress={() => {
+          void retry();
+        }}
+        className="rounded-xl bg-white px-4 py-3"
+      >
+        <Text className="font-semibold text-black">Retry</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const unstable_settings = {
@@ -40,6 +65,7 @@ async function bootstrapNonDb() {
     return;
   bootstrapped = true;
   await hydrateStorage();
+  loadSelectedLanguage();
   loadSelectedTheme();
   const key = process.env.EXPO_PUBLIC_OPENROUTER_KEY;
   if (key)
@@ -47,60 +73,58 @@ async function bootstrapNonDb() {
 }
 
 export default function RootLayout() {
+  const [bootReady, setBootReady] = React.useState(false);
+  const { success: migrationsReady, error: migrationsError } = useMigrations(db, migrations);
+  const [postInitReady, setPostInitReady] = React.useState(false);
+  const loadUser = useUserStore(s => s.loadUser);
+
   useEffect(() => {
-    void bootstrapNonDb();
+    bootstrapNonDb()
+      .catch(err => console.error('bootstrapNonDb failed:', err))
+      .finally(() => setBootReady(true));
   }, []);
 
-  return (
-    <SQLiteProvider
-      databaseName="gym.db"
-      onInit={async (db) => {
-        await migrate(db);
-        await seedExercises(db);
-      }}
-      onError={(err) => {
-        console.error('SQLiteProvider failed to open db:', err);
-        SplashScreen.hideAsync();
-      }}
-      useSuspense
-    >
-      <DbBridge>
-        <Providers>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(app)" />
-          </Stack>
-        </Providers>
-      </DbBridge>
-    </SQLiteProvider>
-  );
-}
-
-// Pushes the live SQLite handle into Zustand stores. Re-runs on every
-// SQLiteProvider mount, so a fresh handle replaces any stale one after
-// Fast Refresh / Activity recreate.
-function DbBridge({ children }: { children: React.ReactNode }) {
-  const db = useSQLiteContext();
-  const setUserDb = useUserStore(s => s.setDb);
-  const setBodyDb = useBodyStore(s => s.setDb);
-  const setWorkoutDb = useWorkoutStore(s => s.setDb);
-  const loadUser = useUserStore(s => s.loadUser);
-  const [ready, setReady] = React.useState(false);
-
   useEffect(() => {
-    setUserDb(db);
-    setBodyDb(db);
-    setWorkoutDb(db);
-    loadUser()
-      .catch(err => console.error('loadUser failed:', err))
-      .finally(() => {
-        setReady(true);
+    if (!migrationsReady)
+      return;
+    (async () => {
+      try {
+        await seedExercises(expoDb);
+        await loadUser();
+      }
+      catch (err) {
+        console.error('post-migration init failed:', err);
+      }
+      finally {
+        setPostInitReady(true);
         SplashScreen.hideAsync();
-      });
-  }, [db, setUserDb, setBodyDb, setWorkoutDb, loadUser]);
+      }
+    })();
+  }, [migrationsReady, loadUser]);
 
-  if (!ready)
+  if (migrationsError) {
+    return (
+      <View className="flex-1 items-center justify-center bg-charcoal-950 px-6">
+        <Text className="mb-3 text-center text-xl font-bold text-white">
+          Database error
+        </Text>
+        <Text className="text-center text-sm text-charcoal-300">
+          {migrationsError.message}
+        </Text>
+      </View>
+    );
+  }
+
+  if (!bootReady || !migrationsReady || !postInitReady)
     return null;
-  return <>{children}</>;
+
+  return (
+    <Providers>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(app)" />
+      </Stack>
+    </Providers>
+  );
 }
 
 function Providers({ children }: { children: React.ReactNode }) {

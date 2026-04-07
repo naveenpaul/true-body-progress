@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
 import { useUserStore } from '@/features/profile/use-user-store';
@@ -93,7 +93,11 @@ export function BodyScreen() {
   const TREND_OPTIONS = [7, 30, 90] as const;
 
   return (
-    <ScrollView className="flex-1 bg-charcoal-950" contentContainerClassName="p-4 pb-10 pt-14">
+    <ScrollView
+      className="flex-1 bg-charcoal-950"
+      contentContainerClassName="p-4 pb-10 pt-14"
+      refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
+    >
       <Text className="mb-4 text-2xl font-bold text-white">Body Metrics</Text>
 
       {/* Weight Trend Chart */}

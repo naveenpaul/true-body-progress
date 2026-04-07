@@ -32,10 +32,12 @@ export type Exercise = {
 export type WorkoutSession = {
   id: number;
   date: string;
-  duration: number; // seconds
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // Populated by getRecentSessions
+  set_count?: number;
+  exercise_names?: string | null;
 };
 
 export type WorkoutSet = {

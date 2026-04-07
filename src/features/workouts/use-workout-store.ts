@@ -1,9 +1,8 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
-
 import type { Exercise, WorkoutSession, WorkoutSetWithExercise } from '@/lib/types';
 
 import { create } from 'zustand';
 import { today } from '@/lib/dates';
+import { expoDb } from '@/lib/db';
 import * as exerciseRepo from '@/lib/db/exercise-repo';
 import * as workoutRepo from '@/lib/db/workout-repo';
 import { createSelectors } from '@/lib/utils';
@@ -15,13 +14,13 @@ type ActiveSet = {
   reps: number;
   weight: number;
   rpe: number | null;
+  rest_time_sec: number | null;
   completed: boolean;
   prev_reps: number | null;
   prev_weight: number | null;
 };
 
 type WorkoutState = {
-  db: SQLiteDatabase | null;
   isActive: boolean;
   startTime: number | null;
   activeSets: ActiveSet[];
@@ -30,7 +29,16 @@ type WorkoutState = {
 
   sessionsLimit: number;
 
-  setDb: (db: SQLiteDatabase) => void;
+  // Rest timer
+  restDuration: number; // seconds, user-configurable default
+  restEndsAt: number | null; // epoch ms when current rest ends, null if idle
+  startRest: () => void;
+  cancelRest: () => void;
+  setRestDuration: (seconds: number) => void;
+
+  // Copy first set's weight/reps to every other set of an exercise
+  copyFirstSetToAll: (exerciseId: number) => void;
+
   loadExercises: () => Promise<void>;
   loadRecentSessions: () => Promise<void>;
   loadMoreSessions: () => Promise<void>;
@@ -45,14 +53,7 @@ type WorkoutState = {
   getSessionSets: (sessionId: number) => Promise<WorkoutSetWithExercise[]>;
 };
 
-function requireDb(db: SQLiteDatabase | null): SQLiteDatabase {
-  if (!db)
-    throw new Error('workout store: db not initialized');
-  return db;
-}
-
 const _useWorkoutStore = create<WorkoutState>((set, get) => ({
-  db: null,
   isActive: false,
   startTime: null,
   activeSets: [],
@@ -60,27 +61,72 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   exercises: [],
   sessionsLimit: 20,
 
-  setDb: (db) => {
-    set({ db });
+  restDuration: 90,
+  restEndsAt: null,
+
+  startRest: () => {
+    set((state) => {
+      // Attribute this rest interval to the most recent set with valid reps
+      // that hasn't already had a rest recorded against it. This is the "set
+      // I just finished" — the rest is the gap between this set and the next.
+      const lastIdx = (() => {
+        for (let i = state.activeSets.length - 1; i >= 0; i--) {
+          const s = state.activeSets[i];
+          if (s.reps > 0 && s.rest_time_sec == null)
+            return i;
+        }
+        return -1;
+      })();
+      const activeSets = lastIdx >= 0
+        ? state.activeSets.map((s, i) =>
+            i === lastIdx ? { ...s, rest_time_sec: state.restDuration } : s,
+          )
+        : state.activeSets;
+      return {
+        restEndsAt: Date.now() + state.restDuration * 1000,
+        activeSets,
+      };
+    });
+  },
+
+  cancelRest: () => {
+    set({ restEndsAt: null });
+  },
+
+  setRestDuration: (seconds) => {
+    set({ restDuration: Math.max(10, Math.floor(seconds)) });
+  },
+
+  copyFirstSetToAll: (exerciseId) => {
+    set((state) => {
+      const sets = state.activeSets;
+      const first = sets.find(s => s.exercise_id === exerciseId);
+      if (!first)
+        return state;
+      return {
+        activeSets: sets.map(s =>
+          s.exercise_id === exerciseId
+            ? { ...s, weight: first.weight, reps: first.reps }
+            : s,
+        ),
+      };
+    });
   },
 
   loadExercises: async () => {
-    const db = requireDb(get().db);
-    const exercises = await exerciseRepo.getAllExercises(db);
+    const exercises = await exerciseRepo.getAllExercises(expoDb);
     set({ exercises });
   },
 
   loadRecentSessions: async () => {
-    const db = requireDb(get().db);
     const limit = get().sessionsLimit;
-    const recentSessions = await workoutRepo.getRecentSessions(db, limit);
+    const recentSessions = await workoutRepo.getRecentSessions(expoDb, limit);
     set({ recentSessions });
   },
 
   loadMoreSessions: async () => {
-    const db = requireDb(get().db);
     const nextLimit = get().sessionsLimit + 20;
-    const recentSessions = await workoutRepo.getRecentSessions(db, nextLimit);
+    const recentSessions = await workoutRepo.getRecentSessions(expoDb, nextLimit);
     set({ sessionsLimit: nextLimit, recentSessions });
   },
 
@@ -89,12 +135,11 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   addExercise: async (exerciseId: number) => {
-    const db = requireDb(get().db);
-    const exercise = await exerciseRepo.getExerciseById(db, exerciseId);
+    const exercise = await exerciseRepo.getExerciseById(expoDb, exerciseId);
     if (!exercise)
       return;
 
-    const prevSets = await workoutRepo.getLastSetsForExercise(db, exerciseId);
+    const prevSets = await workoutRepo.getLastSetsForExercise(expoDb, exerciseId);
     const numSets = Math.max(prevSets.length, 3);
 
     const newSets: ActiveSet[] = [];
@@ -107,6 +152,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
         reps: prev?.reps ?? 0,
         weight: prev?.weight ?? 0,
         rpe: null,
+        rest_time_sec: null,
         completed: false,
         prev_reps: prev?.reps ?? null,
         prev_weight: prev?.weight ?? null,
@@ -135,6 +181,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
         reps: lastSet?.reps ?? 0,
         weight: lastSet?.weight ?? 0,
         rpe: null,
+        rest_time_sec: null,
         completed: false,
         prev_reps: null,
         prev_weight: null,
@@ -173,38 +220,37 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   },
 
   saveWorkout: async () => {
-    const db = requireDb(get().db);
     const state = get();
     if (!state.startTime)
       return 0;
 
-    const durationSec = Math.floor((Date.now() - state.startTime) / 1000);
-    const completedSets = state.activeSets.filter(s => s.completed && s.reps > 0);
+    // Save every set with valid reps. The "completed" flag is no longer
+    // surfaced in the UI — typing reps/weight is the implicit done signal.
+    const completedSets = state.activeSets.filter(s => s.reps > 0);
 
     const sessionId = await workoutRepo.saveWorkout(
-      db,
+      expoDb,
       today(),
-      durationSec,
       completedSets.map(s => ({
         exercise_id: s.exercise_id,
         set_number: s.set_number,
         reps: s.reps,
         weight: s.weight,
         rpe: s.rpe,
+        rest_time_sec: s.rest_time_sec,
       })),
     );
 
-    set({ isActive: false, startTime: null, activeSets: [] });
+    set({ isActive: false, startTime: null, activeSets: [], restEndsAt: null });
     return sessionId;
   },
 
   cancelWorkout: () => {
-    set({ isActive: false, startTime: null, activeSets: [] });
+    set({ isActive: false, startTime: null, activeSets: [], restEndsAt: null });
   },
 
   getSessionSets: async (sessionId) => {
-    const db = requireDb(get().db);
-    return workoutRepo.getSessionSets(db, sessionId);
+    return workoutRepo.getSessionSets(expoDb, sessionId);
   },
 }));
 

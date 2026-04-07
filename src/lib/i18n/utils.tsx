@@ -16,6 +16,17 @@ export const LOCAL = 'local';
 
 export const getLanguage = () => storage.getString(LOCAL); // 'Marc' getItem<Language | undefined>(LOCAL);
 
+export function loadSelectedLanguage() {
+  const language = getLanguage() as Language | undefined;
+  if (!language)
+    return;
+
+  i18n.changeLanguage(language);
+  const isRtl = language === 'ar';
+  I18nManager.allowRTL(isRtl);
+  I18nManager.forceRTL(isRtl);
+}
+
 export const translate = memoize(
   (key: TxKeyPath, options = undefined) =>
     i18n.t(key, options) as unknown as string,

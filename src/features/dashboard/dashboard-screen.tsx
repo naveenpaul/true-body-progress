@@ -1,32 +1,35 @@
+import type { CoachInsight } from '@/lib/ai/llm-client';
 import type { Suggestion, WorkoutSetWithExercise } from '@/lib/types';
 
 import { useRouter } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { Button, Text } from '@/components/ui';
+import { SimpleChart } from '@/features/body/components/simple-chart';
 import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
 import { useWorkoutStore } from '@/features/workouts/use-workout-store';
 import { getCoachSuggestions } from '@/lib/ai/coach-service';
-import { formatDuration, formatRelativeDate } from '@/lib/dates';
+import { formatRelativeDate } from '@/lib/dates';
+import { expoDb } from '@/lib/db';
 import { calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
-import { formatLength, formatWeight } from '@/lib/units';
+import { formatLength, formatWeight, kgToLbs } from '@/lib/units';
 
 export function DashboardScreen() {
   const router = useRouter();
-  const db = useSQLiteContext();
   const user = useUserStore.use.user();
   const loadBody = useBodyStore(s => s.loadData);
   const latest = useBodyStore.use.latest();
   const weeklyChange = useBodyStore.use.weeklyChange();
+  const weightTrend = useBodyStore.use.weightTrend();
   const loadRecentSessions = useWorkoutStore(s => s.loadRecentSessions);
   const recentSessions = useWorkoutStore.use.recentSessions();
   const getSessionSets = useWorkoutStore(s => s.getSessionSets);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [llmInsight, setLlmInsight] = useState<string | null>(null);
+  const [insight, setInsight] = useState<CoachInsight | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
   const [lastWorkoutSets, setLastWorkoutSets] = useState<WorkoutSetWithExercise[]>([]);
 
   const units = user?.preferred_units ?? 'metric';
@@ -35,12 +38,15 @@ export function DashboardScreen() {
     loadBody();
     loadRecentSessions();
     if (user) {
-      getCoachSuggestions(db, user.goal_type).then((result) => {
-        setSuggestions(result.suggestions);
-        setLlmInsight(result.llmInsight);
-      });
+      setInsightLoading(true);
+      getCoachSuggestions(expoDb, user)
+        .then((result) => {
+          setSuggestions(result.suggestions);
+          setInsight(result.insight);
+        })
+        .finally(() => setInsightLoading(false));
     }
-  }, [db, user, loadBody, loadRecentSessions]);
+  }, [user, loadBody, loadRecentSessions]);
 
   useEffect(() => {
     loadAll();
@@ -84,7 +90,11 @@ export function DashboardScreen() {
   const topSuggestion = suggestions[0];
 
   return (
-    <ScrollView className="flex-1 bg-charcoal-950" contentContainerClassName="p-4 pb-8 pt-14">
+    <ScrollView
+      className="flex-1 bg-charcoal-950"
+      contentContainerClassName="p-4 pb-8 pt-14"
+      refreshControl={<RefreshControl refreshing={false} onRefresh={loadAll} tintColor="#22C55E" />}
+    >
       {/* Greeting */}
       <Text className="text-xl font-bold text-white">
         {greeting}
@@ -151,17 +161,81 @@ export function DashboardScreen() {
             </View>
           )}
 
-      {/* Suggestion Banner */}
-      {(llmInsight || topSuggestion) && (
-        <View className="mb-4 rounded-xl bg-success-500/20 p-4">
-          <Text className="mb-1 text-sm font-bold text-success-500">
-            {llmInsight ? 'Coach' : topSuggestion!.title}
-          </Text>
-          <Text className="text-sm text-white">
-            {llmInsight ?? topSuggestion!.body}
-          </Text>
+      {/* Weight Progress Chart */}
+      {weightTrend.length >= 2 && (
+        <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-base font-semibold text-white">Weight progress</Text>
+            <Text className="text-xs text-charcoal-400">
+              last
+              {' '}
+              {weightTrend.length}
+              {' '}
+              entries
+            </Text>
+          </View>
+          <SimpleChart
+            data={weightTrend.map(p => ({
+              value: units === 'imperial' ? kgToLbs(p.weight) : p.weight,
+              label: p.date.slice(5),
+            }))}
+            height={140}
+          />
         </View>
       )}
+
+      {/* Coach Insight */}
+      {insight
+        ? (
+            <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-base font-semibold text-white">Coach</Text>
+                <VerdictPill verdict={insight.verdict} />
+              </View>
+              {insight.past
+                ? (
+                    <View className="mb-3">
+                      <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">What you've been doing</Text>
+                      <Text className="text-sm text-charcoal-100">{insight.past}</Text>
+                    </View>
+                  )
+                : null}
+              {insight.present
+                ? (
+                    <View className="mb-3">
+                      <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">How it's going</Text>
+                      <Text className="text-sm text-charcoal-100">{insight.present}</Text>
+                    </View>
+                  )
+                : null}
+              {insight.next.length > 0 && (
+                <View>
+                  <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">What to do next</Text>
+                  {insight.next.map(item => (
+                    <Text key={item} className="mt-0.5 text-sm text-charcoal-100">
+                      •
+                      {' '}
+                      {item}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </View>
+          )
+        : insightLoading
+          ? (
+              <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
+                <Text className="text-sm text-charcoal-400">Coach is analyzing your data…</Text>
+              </View>
+            )
+          : topSuggestion
+            ? (
+                <View className="mb-4 rounded-xl bg-success-500/20 p-4">
+                  <Text className="mb-1 text-sm font-bold text-success-500">{topSuggestion.title}</Text>
+                  <Text className="text-sm text-white">{topSuggestion.body}</Text>
+                </View>
+              )
+            : null}
 
       {/* Last Workout */}
       {lastSession
@@ -171,13 +245,10 @@ export function DashboardScreen() {
                 <Text className="text-base font-semibold text-white">Last Workout</Text>
                 <Text className="text-xs text-charcoal-400">
                   {formatRelativeDate(lastSession.date)}
-                  {' '}
-                  ·
-                  {formatDuration(lastSession.duration)}
                 </Text>
               </View>
-              {lastWorkoutSets.slice(0, 3).map((set, i) => (
-                <Text key={i} className="mb-1 text-sm text-charcoal-200">
+              {lastWorkoutSets.slice(0, 3).map(set => (
+                <Text key={set.id} className="mb-1 text-sm text-charcoal-200">
                   {set.exercise_name}
                   {' '}
                   {formatWeight(set.weight, units).split(' ')[0]}
@@ -221,6 +292,21 @@ export function DashboardScreen() {
         />
       </View>
     </ScrollView>
+  );
+}
+
+function VerdictPill({ verdict }: { verdict: CoachInsight['verdict'] }) {
+  const map = {
+    good: { label: 'On track', cls: 'bg-success-500/20 text-success-500' },
+    bad: { label: 'Off track', cls: 'bg-danger-500/20 text-danger-500' },
+    steady: { label: 'Steady', cls: 'bg-charcoal-700 text-charcoal-200' },
+    unknown: { label: 'Need data', cls: 'bg-charcoal-700 text-charcoal-300' },
+  };
+  const { label, cls } = map[verdict];
+  return (
+    <View className={`rounded-full px-2 py-0.5 ${cls.split(' ')[0]}`}>
+      <Text className={`text-xs font-bold ${cls.split(' ')[1]}`}>{label}</Text>
+    </View>
   );
 }
 

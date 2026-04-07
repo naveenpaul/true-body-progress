@@ -1,55 +1,59 @@
-// Coach service: combines rule engine + LLM for suggestions
+// Coach service: combines rule engine + structured LLM insight
 
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { GoalType, Suggestion } from '@/lib/types';
+import type { CoachInsight, CoachSnapshot } from './llm-client';
 
+import type { Suggestion, User } from '@/lib/types';
 import * as bodyMetricsRepo from '@/lib/db/body-metrics-repo';
+import * as nutritionRepo from '@/lib/db/nutrition-repo';
+import * as workoutRepo from '@/lib/db/workout-repo';
+
 import { getAllSuggestions } from '@/lib/rules';
-
-import { getCoachingSuggestion, isLLMConfigured } from './llm-client';
-
-function describeTrend(values: number[]): string {
-  if (values.length < 2)
-    return 'insufficient data';
-  const first = values[0];
-  const last = values.at(-1)!;
-  const change = last - first;
-  if (Math.abs(change) < 0.3)
-    return 'stable';
-  return change > 0 ? 'increasing' : 'decreasing';
-}
+import { getCoachInsight, isLLMConfigured } from './llm-client';
 
 export async function getCoachSuggestions(
   db: SQLiteDatabase,
-  goalType: GoalType,
-): Promise<{ suggestions: Suggestion[]; llmInsight: string | null }> {
+  user: User,
+): Promise<{ suggestions: Suggestion[]; insight: CoachInsight | null; snapshot: CoachSnapshot | null }> {
   const suggestions = await getAllSuggestions(db);
 
-  if (!isLLMConfigured()) {
-    return { suggestions, llmInsight: null };
-  }
-
-  const [weightTrend, waistTrend] = await Promise.all([
+  const [latest, weightTrend, waistTrend, workoutSummary, nutritionSummary] = await Promise.all([
+    bodyMetricsRepo.getLatest(db),
     bodyMetricsRepo.getWeightTrend(db, 30),
     bodyMetricsRepo.getWaistTrend(db, 30),
+    workoutRepo.getWorkoutSummary(db, 28),
+    nutritionRepo.getNutritionSummary(db, 7),
   ]);
 
-  const weightDirection = describeTrend(weightTrend.map(w => w.weight));
-  const waistDirection = describeTrend(waistTrend.map(w => w.waist));
+  const weightChange30d = weightTrend.length >= 2
+    ? weightTrend.at(-1)!.weight - weightTrend[0].weight
+    : null;
+  const waistChange30d = waistTrend.length >= 2
+    ? waistTrend.at(-1)!.waist - waistTrend[0].waist
+    : null;
 
-  const strengthSuggestions = suggestions.filter(s => s.type === 'strength');
-  const strengthDirection = strengthSuggestions.length > 0
-    ? strengthSuggestions.map(s => s.title).join(', ')
-    : 'on track';
+  const snapshot: CoachSnapshot = {
+    goal: user.goal_type,
+    age: user.age,
+    heightCm: user.height_cm,
+    targetWeightKg: user.target_weight,
+    currentWeightKg: latest?.weight ?? null,
+    weightChange30dKg: weightChange30d,
+    waistChange30dCm: waistChange30d,
+    sessionsLast4w: workoutSummary.session_count,
+    totalSetsLast4w: workoutSummary.total_sets,
+    totalVolumeKg: workoutSummary.total_volume,
+    topExercises: workoutSummary.top_exercises,
+    daysLoggedLast7: nutritionSummary.days_logged,
+    avgCalories: nutritionSummary.avg_calories,
+    avgProteinG: nutritionSummary.avg_protein,
+    ruleFindings: suggestions.map(s => ({ title: s.title, body: s.body })),
+  };
 
-  const llmInsight = await getCoachingSuggestion({
-    goalType,
-    weightTrend: weightDirection,
-    waistTrend: waistDirection,
-    strengthTrend: strengthDirection,
-    ruleSuggestions: suggestions.map(s => ({ title: s.title, body: s.body })),
-  });
+  if (!isLLMConfigured())
+    return { suggestions, insight: null, snapshot };
 
-  return { suggestions, llmInsight };
+  const insight = await getCoachInsight(snapshot);
+  return { suggestions, insight, snapshot };
 }

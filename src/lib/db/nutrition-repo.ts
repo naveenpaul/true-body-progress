@@ -50,3 +50,36 @@ export async function getMealsForDate(db: SQLiteDatabase, date: string): Promise
 export async function deleteMeal(db: SQLiteDatabase, id: number): Promise<void> {
   await db.runAsync('DELETE FROM nutrition_entry WHERE id = ?', [id]);
 }
+
+// Per-day rollup for the last N days. Used by coach service to compute averages.
+export async function getNutritionSummary(
+  db: SQLiteDatabase,
+  days: number = 7,
+): Promise<{ days_logged: number; avg_calories: number; avg_protein: number; avg_carbs: number; avg_fats: number }> {
+  const result = await db.getFirstAsync<{
+    days_logged: number;
+    avg_calories: number;
+    avg_protein: number;
+    avg_carbs: number;
+    avg_fats: number;
+  }>(
+    `SELECT
+       COUNT(DISTINCT date) as days_logged,
+       COALESCE(AVG(daily_cal), 0) as avg_calories,
+       COALESCE(AVG(daily_protein), 0) as avg_protein,
+       COALESCE(AVG(daily_carbs), 0) as avg_carbs,
+       COALESCE(AVG(daily_fats), 0) as avg_fats
+     FROM (
+       SELECT date,
+              SUM(calories) as daily_cal,
+              SUM(protein) as daily_protein,
+              SUM(carbs) as daily_carbs,
+              SUM(fats) as daily_fats
+       FROM nutrition_entry
+       WHERE date >= date('now', '-' || ? || ' days')
+       GROUP BY date
+     )`,
+    [days],
+  );
+  return result ?? { days_logged: 0, avg_calories: 0, avg_protein: 0, avg_carbs: 0, avg_fats: 0 };
+}

@@ -5,6 +5,7 @@ module.exports = function (api) {
       'babel-preset-expo',
     ],
     plugins: [
+      ['inline-import', { extensions: ['.sql'] }],
       [
         'module-resolver',
         {
