@@ -19,6 +19,13 @@
         "EXPO_PUBLIC_APP_ENV": "production"
       }
     },
+    "production-apk": {
+      "extends": "production",
+      "android": {
+        "buildType": "apk",
+        "image": "latest"
+      }
+    },
     "preview": {
       "channel": "preview",
       "autoIncrement": true,
