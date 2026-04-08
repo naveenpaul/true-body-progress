@@ -136,7 +136,7 @@ export function SimpleChart({ data, height = 140, color = '#22C55E' }: Props) {
               <Circle cx={xFor(0)} cy={yFor(data[0].value)} r={3} fill={color} />
               <Circle
                 cx={xFor(data.length - 1)}
-                cy={yFor(data.at(-1).value)}
+                cy={yFor(data.at(-1)!.value)}
                 r={3.5}
                 fill={color}
               />
@@ -156,7 +156,7 @@ export function SimpleChart({ data, height = 140, color = '#22C55E' }: Props) {
                 </Text>
               )}
               <Text className="text-[10px] text-ink-faint" style={{ fontVariant: ['tabular-nums'] }}>
-                {data.at(-1).label}
+                {data.at(-1)!.label}
               </Text>
             </View>
           </>
