@@ -26,6 +26,7 @@ type WorkoutState = {
   activeSets: ActiveSet[];
   recentSessions: WorkoutSession[];
   exercises: Exercise[];
+  volumeByMuscle: Array<{ muscle_group: string; date: string; volume: number }>;
 
   sessionsLimit: number;
 
@@ -42,6 +43,7 @@ type WorkoutState = {
   loadExercises: () => Promise<void>;
   loadRecentSessions: () => Promise<void>;
   loadMoreSessions: () => Promise<void>;
+  loadVolumeByMuscle: (days?: number) => Promise<void>;
   startWorkout: () => void;
   addExercise: (exerciseId: number) => Promise<void>;
   updateSet: (index: number, updates: Partial<ActiveSet>) => void;
@@ -51,6 +53,9 @@ type WorkoutState = {
   saveWorkout: () => Promise<number>;
   cancelWorkout: () => void;
   getSessionSets: (sessionId: number) => Promise<WorkoutSetWithExercise[]>;
+  updateHistorySet: (setId: number, updates: { reps: number; weight: number }) => Promise<void>;
+  deleteHistorySet: (setId: number) => Promise<void>;
+  deleteSession: (sessionId: number) => Promise<void>;
 };
 
 const _useWorkoutStore = create<WorkoutState>((set, get) => ({
@@ -59,6 +64,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   activeSets: [],
   recentSessions: [],
   exercises: [],
+  volumeByMuscle: [],
   sessionsLimit: 20,
 
   restDuration: 90,
@@ -122,6 +128,11 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
     const limit = get().sessionsLimit;
     const recentSessions = await workoutRepo.getRecentSessions(expoDb, limit);
     set({ recentSessions });
+  },
+
+  loadVolumeByMuscle: async (days = 60) => {
+    const volumeByMuscle = await workoutRepo.getVolumeByMuscleGroup(expoDb, days);
+    set({ volumeByMuscle });
   },
 
   loadMoreSessions: async () => {
@@ -251,6 +262,21 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   getSessionSets: async (sessionId) => {
     return workoutRepo.getSessionSets(expoDb, sessionId);
+  },
+
+  updateHistorySet: async (setId, updates) => {
+    await workoutRepo.updateSet(expoDb, setId, updates);
+    await get().loadRecentSessions();
+  },
+
+  deleteHistorySet: async (setId) => {
+    await workoutRepo.deleteSet(expoDb, setId);
+    await get().loadRecentSessions();
+  },
+
+  deleteSession: async (sessionId) => {
+    await workoutRepo.deleteSession(expoDb, sessionId);
+    await get().loadRecentSessions();
   },
 }));
 

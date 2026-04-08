@@ -1,10 +1,10 @@
 import type { TextStyle } from 'react-native';
 import type { CoachInsight } from '@/lib/ai/llm-client';
 
-import type { Suggestion, WorkoutSetWithExercise } from '@/lib/types';
+import type { Suggestion } from '@/lib/types';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,7 +14,6 @@ import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
 import { useWorkoutStore } from '@/features/workouts/use-workout-store';
 import { getCoachSuggestions } from '@/lib/ai/coach-service';
-import { formatRelativeDate } from '@/lib/dates';
 import { expoDb } from '@/lib/db';
 import { calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 import { formatLength, formatWeight, kgToLbs } from '@/lib/units';
@@ -30,39 +29,50 @@ export function DashboardScreen() {
   const latest = useBodyStore.use.latest();
   const weeklyChange = useBodyStore.use.weeklyChange();
   const weightTrend = useBodyStore.use.weightTrend();
-  const loadRecentSessions = useWorkoutStore(s => s.loadRecentSessions);
-  const recentSessions = useWorkoutStore.use.recentSessions();
-  const getSessionSets = useWorkoutStore(s => s.getSessionSets);
+  const loadVolumeByMuscle = useWorkoutStore(s => s.loadVolumeByMuscle);
+  const volumeByMuscle = useWorkoutStore.use.volumeByMuscle();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [insight, setInsight] = useState<CoachInsight | null>(null);
-  const [insightLoading, setInsightLoading] = useState(false);
-  const [lastWorkoutSets, setLastWorkoutSets] = useState<WorkoutSetWithExercise[]>([]);
+  const [coachAttempted, setCoachAttempted] = useState(false);
+  // Bumped by pull-to-refresh to re-trigger the data-loading effect without
+  // needing a memoized loadAll callback (which the React Compiler won't accept
+  // when it closes over `user`).
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const units = user?.preferred_units ?? 'metric';
 
-  const loadAll = useCallback(() => {
+  useEffect(() => {
     loadBody();
-    loadRecentSessions();
-    if (user) {
-      setInsightLoading(true);
-      getCoachSuggestions(expoDb, user)
-        .then((result) => {
-          setSuggestions(result.suggestions);
-          setInsight(result.insight);
-        })
-        .finally(() => setInsightLoading(false));
-    }
-  }, [user, loadBody, loadRecentSessions]);
+    loadVolumeByMuscle(60);
+    if (!user)
+      return;
+    let cancelled = false;
+    // All setState calls happen inside async callbacks, not sync in the effect
+    // body, so the react-hooks/set-state-in-effect lint stays happy.
+    getCoachSuggestions(expoDb, user)
+      .then((result) => {
+        if (cancelled)
+          return;
+        setSuggestions(result.suggestions);
+        setInsight(result.insight);
+        setCoachAttempted(true);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setCoachAttempted(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, loadBody, loadVolumeByMuscle, refreshTick]);
 
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+  const insightLoading = !!user && !insight && !coachAttempted;
 
-  useEffect(() => {
-    if (recentSessions.length > 0) {
-      getSessionSets(recentSessions[0].id).then(setLastWorkoutSets);
-    }
-  }, [recentSessions, getSessionSets]);
+  const onRefresh = () => {
+    setCoachAttempted(false);
+    setInsight(null);
+    setRefreshTick(t => t + 1);
+  };
 
   if (!user) {
     return (
@@ -91,15 +101,32 @@ export function DashboardScreen() {
   );
   const targetCals = calculateTargetCalories(tdee, user.goal_type);
   const greeting = getGreeting();
-  const lastSession = recentSessions[0];
   const topSuggestion = suggestions[0];
+
+  // Group volume rows into one trend per muscle group, sorted by total volume
+  // (most-trained groups first). Single-session groups still render — a single
+  // dot is more honest than hiding the muscle entirely.
+  const muscleTrends = (() => {
+    const map = new Map<string, Array<{ date: string; volume: number }>>();
+    for (const row of volumeByMuscle) {
+      const arr = map.get(row.muscle_group) ?? [];
+      arr.push({ date: row.date, volume: row.volume });
+      map.set(row.muscle_group, arr);
+    }
+    return Array.from(map.entries(), ([muscle, points]) => ({
+      muscle,
+      points,
+      total: points.reduce((s, p) => s + p.volume, 0),
+    }))
+      .sort((a, b) => b.total - a.total);
+  })();
 
   return (
     <ScrollView
       className="flex-1 bg-ink-base"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32 }}
       contentContainerClassName="px-5"
-      refreshControl={<RefreshControl refreshing={false} onRefresh={loadAll} tintColor="#22C55E" />}
+      refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} tintColor="#22C55E" />}
     >
       {/* Header */}
       <Text className="text-3xl font-bold text-ink-text">
@@ -146,12 +173,12 @@ export function DashboardScreen() {
           )}
 
       {/* Coach — hero card, elevated + hairline border, distinct from everything else */}
-      <SectionLabel>Coach</SectionLabel>
+      <SectionLabel>AI Coach</SectionLabel>
       {insight
         ? (
             <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-elevated p-5">
               <View className="mb-4 flex-row items-center justify-between">
-                <Text className="text-lg font-semibold text-ink-text">Today's read</Text>
+                <Text className="text-lg font-semibold text-ink-text">Where you stand</Text>
                 <VerdictPill verdict={insight.verdict} />
               </View>
               {insight.past
@@ -224,43 +251,45 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* Last workout — flat list, no card */}
+      {/* Strength progress — one mini chart per muscle group, sorted by volume */}
       <View className="mb-10 border-t border-ink-hairline pt-5">
-        <View className="mb-3 flex-row items-baseline justify-between">
-          <SectionLabel>Last workout</SectionLabel>
-          {lastSession && (
-            <Text className="text-xs text-ink-faint">
-              {formatRelativeDate(lastSession.date)}
-            </Text>
-          )}
+        <View className="mb-4 flex-row items-baseline justify-between">
+          <SectionLabel>Strength progress</SectionLabel>
+          <Text className="text-xs text-ink-faint">last 60 days</Text>
         </View>
-        {lastSession
+        {muscleTrends.length === 0
           ? (
-              <View>
-                {lastWorkoutSets.slice(0, 3).map(set => (
-                  <View key={set.id} className="flex-row items-center justify-between py-1.5">
-                    <Text className="text-base text-ink-text">{set.exercise_name}</Text>
-                    <Text className="text-base text-ink-muted" style={NUM_STYLE}>
-                      {formatWeight(set.weight, units).split(' ')[0]}
-                      {' × '}
-                      {set.reps}
-                    </Text>
-                  </View>
-                ))}
-                {lastWorkoutSets.length > 3 && (
-                  <Text className="mt-1 text-xs text-ink-faint">
-                    +
-                    {lastWorkoutSets.length - 3}
-                    {' '}
-                    more sets
-                  </Text>
-                )}
-              </View>
+              <Text className="text-sm text-ink-muted">
+                Log a workout to see per-muscle volume trends.
+              </Text>
             )
           : (
-              <Text className="text-sm text-ink-muted">
-                No workouts yet. Start your first session.
-              </Text>
+              muscleTrends.map(({ muscle, points, total }) => (
+                <View key={muscle} className="mb-5">
+                  <View className="mb-1 flex-row items-baseline justify-between">
+                    <Text className="text-sm font-semibold text-ink-text capitalize">{muscle}</Text>
+                    <Text className="text-xs text-ink-faint" style={NUM_STYLE}>
+                      {formatWeight(Math.round(total), units)}
+                      {' total'}
+                    </Text>
+                  </View>
+                  {points.length >= 2
+                    ? (
+                        <SimpleChart
+                          data={points.map(p => ({
+                            value: units === 'imperial' ? Math.round(kgToLbs(p.volume)) : Math.round(p.volume),
+                            label: p.date.slice(5),
+                          }))}
+                          height={80}
+                        />
+                      )
+                    : (
+                        <Text className="text-xs text-ink-faint">
+                          Only 1 session logged — train it again to see a trend.
+                        </Text>
+                      )}
+                </View>
+              ))
             )}
       </View>
 
