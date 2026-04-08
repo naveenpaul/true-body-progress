@@ -51,6 +51,9 @@ type WorkoutState = {
   saveWorkout: () => Promise<number>;
   cancelWorkout: () => void;
   getSessionSets: (sessionId: number) => Promise<WorkoutSetWithExercise[]>;
+  updateHistorySet: (setId: number, updates: { reps: number; weight: number }) => Promise<void>;
+  deleteHistorySet: (setId: number) => Promise<void>;
+  deleteSession: (sessionId: number) => Promise<void>;
 };
 
 const _useWorkoutStore = create<WorkoutState>((set, get) => ({
@@ -251,6 +254,21 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   getSessionSets: async (sessionId) => {
     return workoutRepo.getSessionSets(expoDb, sessionId);
+  },
+
+  updateHistorySet: async (setId, updates) => {
+    await workoutRepo.updateSet(expoDb, setId, updates);
+    await get().loadRecentSessions();
+  },
+
+  deleteHistorySet: async (setId) => {
+    await workoutRepo.deleteSet(expoDb, setId);
+    await get().loadRecentSessions();
+  },
+
+  deleteSession: async (sessionId) => {
+    await workoutRepo.deleteSession(expoDb, sessionId);
+    await get().loadRecentSessions();
   },
 }));
 

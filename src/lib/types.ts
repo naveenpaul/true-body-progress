@@ -37,6 +37,8 @@ export type WorkoutSession = {
   updated_at: string;
   // Populated by getRecentSessions
   set_count?: number;
+  total_volume?: number;
+  total_reps?: number;
   exercise_names?: string | null;
 };
 

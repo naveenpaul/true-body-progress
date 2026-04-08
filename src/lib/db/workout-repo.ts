@@ -36,10 +36,12 @@ export async function saveWorkout(
   return sessionId;
 }
 
-export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10): Promise<Array<WorkoutSession & { set_count: number; exercise_names: string | null }>> {
+export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10): Promise<Array<WorkoutSession & { set_count: number; total_volume: number; total_reps: number; exercise_names: string | null }>> {
   return db.getAllAsync(
     `SELECT s.*,
             COUNT(ws.id) as set_count,
+            COALESCE(SUM(ws.weight * ws.reps), 0) as total_volume,
+            COALESCE(SUM(ws.reps), 0) as total_reps,
             (SELECT GROUP_CONCAT(name, ', ') FROM (
                SELECT DISTINCT e.name
                FROM workout_set ws2
@@ -54,6 +56,21 @@ export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10):
      LIMIT ?`,
     [limit],
   );
+}
+
+export async function updateSet(
+  db: SQLiteDatabase,
+  setId: number,
+  updates: { reps: number; weight: number },
+): Promise<void> {
+  await db.runAsync(
+    `UPDATE workout_set SET reps = ?, weight = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    [updates.reps, updates.weight, setId],
+  );
+}
+
+export async function deleteSet(db: SQLiteDatabase, setId: number): Promise<void> {
+  await db.runAsync('DELETE FROM workout_set WHERE id = ?', [setId]);
 }
 
 export async function getSessionSets(db: SQLiteDatabase, sessionId: number): Promise<WorkoutSetWithExercise[]> {
