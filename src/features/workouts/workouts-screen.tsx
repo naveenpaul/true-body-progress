@@ -2,7 +2,7 @@ import type { TextStyle } from 'react-native';
 
 import type { WorkoutSetWithExercise } from '@/lib/types';
 import * as React from 'react';
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { Alert, FlatList, Modal, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -122,11 +122,17 @@ export function WorkoutsScreen() {
   }, [loadData]);
 
   // Group sessions by calendar date so the history reads as one entry per day.
-  const sessionsByDate = recentSessions.reduce<Record<string, typeof recentSessions>>((acc, s) => {
-    (acc[s.date] ??= []).push(s);
-    return acc;
-  }, {});
-  const groupedDates = Object.keys(sessionsByDate).sort((a, b) => (a < b ? 1 : -1));
+  // Memoize so the effect below doesn't refire on every render and infinite-loop.
+  const sessionsByDate = useMemo(() => {
+    return recentSessions.reduce<Record<string, typeof recentSessions>>((acc, s) => {
+      (acc[s.date] ??= []).push(s);
+      return acc;
+    }, {});
+  }, [recentSessions]);
+  const groupedDates = useMemo(
+    () => Object.keys(sessionsByDate).sort((a, b) => (a < b ? 1 : -1)),
+    [sessionsByDate],
+  );
 
   useEffect(() => {
     if (!expandedDate) {

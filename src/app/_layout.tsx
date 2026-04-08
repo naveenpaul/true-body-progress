@@ -67,11 +67,11 @@ async function bootstrapNonDb() {
   await hydrateStorage();
   loadSelectedLanguage();
   loadSelectedTheme();
-  const key = process.env.EXPO_PUBLIC_OPENROUTER_KEY;
+  const key = process.env.EXPO_PUBLIC_GROQ_KEY;
   if (key)
-    configureLLM(key, process.env.EXPO_PUBLIC_OPENROUTER_MODEL);
+    configureLLM(key, process.env.EXPO_PUBLIC_GROQ_MODEL);
   else
-    console.warn('[bootstrap] EXPO_PUBLIC_OPENROUTER_KEY not set — coach LLM disabled, dashboard will fall back to rule engine');
+    console.warn('[bootstrap] EXPO_PUBLIC_GROQ_KEY not set — coach LLM disabled, dashboard will fall back to rule engine');
 }
 
 export default function RootLayout() {

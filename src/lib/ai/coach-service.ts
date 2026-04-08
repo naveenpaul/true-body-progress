@@ -34,6 +34,7 @@ export async function getCoachSuggestions(
     : null;
 
   const snapshot: CoachSnapshot = {
+    name: user.name,
     goal: user.goal_type,
     age: user.age,
     heightCm: user.height_cm,

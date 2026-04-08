@@ -1,11 +1,12 @@
 // LLM client for natural language coaching insights
-// Uses OpenRouter API (free tier models) or returns null when not configured
+// Uses Groq's OpenAI-compatible chat completions endpoint, or returns null
+// when not configured. Groq is direct (no aggregator), so the free tier is
+// per-account rather than a contended shared pool.
 
-const OPENROUTER_BASE = 'https://openrouter.ai/api/v1/chat/completions';
+const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Known-good free model on OpenRouter. Override at build time with
-// EXPO_PUBLIC_OPENROUTER_MODEL if you want a different one.
-export const DEFAULT_LLM_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+// Default Groq model. Override at build time with EXPO_PUBLIC_GROQ_MODEL.
+export const DEFAULT_LLM_MODEL = 'llama-3.3-70b-versatile';
 
 type LLMConfig = {
   apiKey: string;
@@ -32,6 +33,7 @@ export function isLLMConfigured(): boolean {
 
 export type CoachSnapshot = {
   // Profile
+  name: string;
   goal: string;
   age: number;
   heightCm: number;
@@ -63,7 +65,7 @@ export type CoachInsight = {
 
 export async function getCoachInsight(snapshot: CoachSnapshot): Promise<CoachInsight | null> {
   if (!config) {
-    console.warn('[llm-client] getCoachInsight skipped: not configured (missing EXPO_PUBLIC_OPENROUTER_KEY?)');
+    console.warn('[llm-client] getCoachInsight skipped: not configured (missing EXPO_PUBLIC_GROQ_KEY?)');
     return null;
   }
 
@@ -71,13 +73,11 @@ export async function getCoachInsight(snapshot: CoachSnapshot): Promise<CoachIns
   console.log(`[llm-client] calling ${config.model}, prompt length=${prompt.length}`);
 
   try {
-    const response = await fetch(OPENROUTER_BASE, {
+    const response = await fetch(GROQ_BASE, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://gym-app.local',
-        'X-Title': 'Gym App',
       },
       body: JSON.stringify({
         model: config.model,
@@ -92,14 +92,14 @@ export async function getCoachInsight(snapshot: CoachSnapshot): Promise<CoachIns
 
     if (!response.ok) {
       const body = await response.text().catch(() => '<unreadable>');
-      console.error(`[llm-client] OpenRouter ${response.status} ${response.statusText}: ${body}`);
+      console.error(`[llm-client] Groq ${response.status} ${response.statusText}: ${body}`);
       return null;
     }
 
     const data = await response.json();
     const message: string | undefined = data.choices?.[0]?.message?.content;
     if (!message) {
-      console.error('[llm-client] OpenRouter returned no message:', JSON.stringify(data).slice(0, 500));
+      console.error('[llm-client] Groq returned no message:', JSON.stringify(data).slice(0, 500));
       return null;
     }
 
@@ -112,22 +112,27 @@ export async function getCoachInsight(snapshot: CoachSnapshot): Promise<CoachIns
   }
 }
 
-const SYSTEM_PROMPT = `You are a concise, evidence-based fitness coach. You read a user's training, body, and nutrition snapshot and respond in EXACTLY this format with no extra text:
+const SYSTEM_PROMPT = `You are a concise, evidence-based fitness coach speaking DIRECTLY to the lifter you know personally. Always use "you" / "your" — never "the user", "they", or third person. Address them by their first name occasionally (sparingly, not in every line). Tone: a knowledgeable training partner, warm but direct. Respond in EXACTLY this format with no extra text:
 
-PAST: <one sentence summarizing what they've been doing the last 4 weeks>
-NOW: <one sentence on the current state — are they progressing, stalling, or regressing>
+PAST: <one sentence to them about what they've been doing the last 4 weeks ("You ran four sessions…")>
+NOW: <one sentence to them about the current state — are you progressing, stalling, or regressing>
 VERDICT: <one of: good | bad | steady>
 NEXT:
-- <specific actionable suggestion>
+- <specific actionable suggestion in second person ("Add a set to your…")>
 - <specific actionable suggestion>
 - <specific actionable suggestion>
 
-Reference real numbers from the snapshot. No fluff. No hedging. If data is missing, say so directly. Verdict guidance: "good" = clearly trending toward goal; "bad" = trending away; "steady" = no clear movement.`;
+Reference real numbers from the snapshot. No fluff. No hedging. No third-person voice. If data is missing, say so directly. Verdict guidance: "good" = clearly trending toward goal; "bad" = trending away; "steady" = no clear movement.`;
+
+const FIRST_NAME_SPLIT_RE = /\s+/;
 
 function buildPrompt(s: CoachSnapshot): string {
   const lines: string[] = [];
+  const firstName = s.name.trim().split(FIRST_NAME_SPLIT_RE)[0] || 'there';
+  lines.push(`Lifter: ${firstName}`);
   lines.push(`Goal: ${s.goal.replace('_', ' ')}`);
   lines.push(`Profile: ${s.age}y, ${s.heightCm}cm, target ${s.targetWeightKg}kg`);
+  lines.push(`Address them as "${firstName}" (first name) and use "you" throughout.`);
   lines.push('');
   lines.push('Body (last 30 days):');
   lines.push(`- Current weight: ${s.currentWeightKg != null ? `${s.currentWeightKg}kg` : 'unlogged'}`);

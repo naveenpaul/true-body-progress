@@ -11,6 +11,7 @@ import {
 // silently turning the dashboard coach into the empty-state fallback.
 
 const SNAPSHOT = {
+  name: 'Jimmy',
   goal: 'fat_loss',
   age: 30,
   heightCm: 180,
@@ -34,13 +35,11 @@ describe('llm-client', () => {
   });
 
   describe('default model id', () => {
-    // Regression: the default used to be "qwen/qwen3.6-plus:free" — a model that
-    // does not exist on OpenRouter, so even users who set their API key got 404s
-    // and silently saw the fallback empty state.
-    it('is a real-looking openrouter slug, not the historical broken default', () => {
-      expect(DEFAULT_LLM_MODEL).not.toBe('qwen/qwen3.6-plus:free');
-      expect(DEFAULT_LLM_MODEL).toMatch(/^[a-z0-9-]+\/[a-z0-9.\-:]+$/);
-      expect(DEFAULT_LLM_MODEL).toMatch(/:free$/);
+    it('is a valid groq model slug', () => {
+      expect(DEFAULT_LLM_MODEL).toMatch(/^[a-z0-9.\-/]+$/);
+      // Regression: previously defaulted to a :free OpenRouter slug that
+      // pointed at a contended/deprecated shared pool. We're on Groq direct now.
+      expect(DEFAULT_LLM_MODEL).not.toMatch(/:free$/);
     });
   });
 
@@ -72,8 +71,8 @@ describe('llm-client', () => {
     });
 
     it('respects an explicit model override', () => {
-      configureLLM('sk-test', 'google/gemini-2.0-flash-exp:free');
-      expect(getLLMConfig()?.model).toBe('google/gemini-2.0-flash-exp:free');
+      configureLLM('sk-test', 'meta-llama/llama-3.3-70b-versatile');
+      expect(getLLMConfig()?.model).toBe('meta-llama/llama-3.3-70b-versatile');
     });
   });
 
@@ -86,8 +85,8 @@ describe('llm-client', () => {
       fetchSpy.mockRestore();
     });
 
-    it('returns null and logs when OpenRouter rejects the model id', async () => {
-      configureLLM('sk-test', 'totally/made-up-model:free');
+    it('returns null and logs when Groq rejects the model id', async () => {
+      configureLLM('sk-test', 'totally/made-up-model');
       const fetchSpy = jest
         .spyOn(globalThis, 'fetch' as any)
         .mockResolvedValue(new Response('{"error":{"message":"unknown model"}}', { status: 404 }) as any);

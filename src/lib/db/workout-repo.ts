@@ -163,6 +163,28 @@ export async function deleteSession(db: SQLiteDatabase, sessionId: number): Prom
   await db.runAsync('DELETE FROM workout_session WHERE id = ?', [sessionId]);
 }
 
+// Per-day training volume bucketed by primary muscle group. Used for the
+// dashboard strength-progress section, which renders one mini chart per
+// muscle group the user actually trains.
+export async function getVolumeByMuscleGroup(
+  db: SQLiteDatabase,
+  days: number = 60,
+): Promise<Array<{ muscle_group: string; date: string; volume: number }>> {
+  return db.getAllAsync<{ muscle_group: string; date: string; volume: number }>(
+    `SELECT e.primary_muscle_group as muscle_group,
+            s.date as date,
+            SUM(ws.weight * ws.reps) as volume
+     FROM workout_set ws
+     JOIN workout_session s ON ws.session_id = s.id
+     JOIN exercise e ON ws.exercise_id = e.id
+     WHERE s.date >= date('now', '-' || ? || ' days')
+       AND ws.weight * ws.reps > 0
+     GROUP BY e.primary_muscle_group, s.date
+     ORDER BY e.primary_muscle_group, s.date ASC`,
+    [days],
+  );
+}
+
 // Aggregate workout activity over the last N days.
 // Used by coach service to summarize training load for the LLM.
 export async function getWorkoutSummary(
