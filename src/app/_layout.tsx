@@ -69,7 +69,9 @@ async function bootstrapNonDb() {
   loadSelectedTheme();
   const key = process.env.EXPO_PUBLIC_OPENROUTER_KEY;
   if (key)
-    configureLLM(key, 'qwen/qwen3.6-plus:free');
+    configureLLM(key, process.env.EXPO_PUBLIC_OPENROUTER_MODEL);
+  else
+    console.warn('[bootstrap] EXPO_PUBLIC_OPENROUTER_KEY not set — coach LLM disabled, dashboard will fall back to rule engine');
 }
 
 export default function RootLayout() {

@@ -3,15 +3,27 @@
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1/chat/completions';
 
+// Known-good free model on OpenRouter. Override at build time with
+// EXPO_PUBLIC_OPENROUTER_MODEL if you want a different one.
+export const DEFAULT_LLM_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+
 type LLMConfig = {
   apiKey: string;
-  model?: string;
+  model: string;
 };
 
 let config: LLMConfig | null = null;
 
 export function configureLLM(apiKey: string, model?: string): void {
-  config = { apiKey, model: model ?? 'qwen/qwen3.6-plus:free' };
+  config = { apiKey, model: model && model.length > 0 ? model : DEFAULT_LLM_MODEL };
+}
+
+export function resetLLMForTests(): void {
+  config = null;
+}
+
+export function getLLMConfig(): LLMConfig | null {
+  return config;
 }
 
 export function isLLMConfigured(): boolean {
