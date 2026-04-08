@@ -34,6 +34,16 @@ const button = tv({
         label: 'text-white',
         indicator: 'text-white',
       },
+      primary: {
+        container: 'bg-success-500',
+        label: 'text-black',
+        indicator: 'text-black',
+      },
+      tonal: {
+        container: 'bg-charcoal-850',
+        label: 'text-white',
+        indicator: 'text-white',
+      },
       ghost: {
         container: 'bg-transparent',
         label: 'text-black underline dark:text-white',

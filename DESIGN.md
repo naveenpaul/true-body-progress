@@ -1,116 +1,185 @@
-# Design System — Gym App
+# Design System — Gym
 
-## Platform
-- React Native + Expo (managed workflow)
-- UI framework: React Native Paper (Material Design 3)
-- Chart library: react-native-gifted-charts
+> A personal fitness instrument. Numbers are the hero. Chrome disappears. One bold accent earned by decisive moments.
 
-## Theme
-Dark theme only (MVP). Gym-appropriate, data-forward.
+## Aesthetic thesis
 
-## Colors
+**Quiet instrument.** This is not a social fitness app. Layouts are mostly monochrome and editorial. Cards are used sparingly — when they appear, they mean something. Accent green is reserved for verbs (CTAs, "on track" verdicts, completed sets, positive deltas) and never used as decoration. The dashboard reads like a cockpit, not a feed.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| surface | #121212 | Primary background |
-| surface-alt | #1E1E1E | Cards, elevated surfaces, bottom sheets |
-| on-surface | #FFFFFF | Primary text, numbers |
-| on-surface-2 | #B3B3B3 | Secondary text, labels, timestamps |
-| accent | #00E676 | Electric green. CTAs, positive changes, active states |
-| accent-dim | #00E67633 | Accent at 20% opacity. Suggestion banner backgrounds |
-| danger | #FF5252 | Negative changes, errors, destructive actions |
-| warning | #FFB74D | Caution states, approaching limits |
+## Stack (actual, verified)
 
-### Contrast requirements
-- All text: minimum 4.5:1 against background (WCAG AA)
-- Large text (18px+): minimum 3:1
-- Chart labels and axis text: minimum 4.5:1 (override chart lib defaults)
+- **Expo SDK 54**, React Native 0.81.5
+- **NativeWind / Uniwind / Tailwind v4** for styling (theme defined in `src/global.css` via `@theme`)
+- **Inter** typeface (`@expo-google-fonts/inter`), tabular numerals via `fontVariant`
+- **react-native-safe-area-context** for screen padding (never `pt-14`)
+- **react-native-gifted-charts** for charts (wrapped in `SimpleChart`)
+- Dark theme only (MVP)
 
-## Typography (Roboto)
+## Color tokens
 
-| Style | Size | Weight | Usage |
-|-------|------|--------|-------|
-| display | 32px | Bold | Big numbers: body weight, reps, weight lifted |
-| title | 20px | Bold | Screen titles, exercise names |
-| body | 16px | Regular | Descriptions, suggestions, coaching text |
-| label | 14px | Medium | Field labels, tab names, chart labels |
-| caption | 12px | Regular | Timestamps, secondary info, set numbers |
+Defined in `src/global.css` under `@theme`. New "ink" tokens are the source of truth; legacy `charcoal-*` and `success-*` remain for screens not yet migrated.
 
-## Spacing Scale
+| Token | Hex | Role |
+|---|---|---|
+| `ink-base` | `#0B0B0C` | Page background |
+| `ink-card` | `#15161A` | Default card |
+| `ink-elevated` | `#1C1D22` | Hero card (Coach, only) |
+| `ink-hairline` | `#26272D` | Dividers, card borders, inactive chip borders |
+| `ink-text` | `#F4F4F5` | Primary text, numbers |
+| `ink-muted` | `#A1A1AA` | Secondary text |
+| `ink-faint` | `#71717A` | Tertiary, captions, section labels |
+| `ink-accent` | `#22C55E` | Reserved accent (also `success-500`) |
+| `ink-danger` | `#F87171` | Negative deltas, errors, destructive |
+| `ink-warning` | `#FBBF24` | Caution, approaching limits |
 
-| Token | Value |
-|-------|-------|
-| xs | 4px |
-| sm | 8px |
-| md | 16px |
-| lg | 24px |
-| xl | 32px |
+**Accent budget.** Accent appears on: filled primary buttons, completed set checkmarks, "on track" verdict, positive deltas, active tab, FAB, "+ Add set" affordances. Accent does NOT appear on: card borders, dividers, section headers, chart axis labels, decorative anything.
 
-## Border Radius
+## Typography
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| sm | 8px | Buttons, inputs, chips |
-| md | 12px | Cards, sheets |
-| lg | 16px | Bottom sheet handle area |
+Single family: **Inter** (already loaded). Numbers use `style={{ fontVariant: ['tabular-nums'] }}` so columns of stats align row-to-row. A future upgrade path is Geist Sans + Geist Mono if `@expo-google-fonts/geist` is added.
 
-## Touch Targets
-- Minimum 48x48dp (Material guideline)
-- Workout set inputs: use stepper controls (+/-) not raw text fields
-- RPE: horizontal chip selector (1-10), not text input
+| Role | Tailwind | Notes |
+|---|---|---|
+| Display (stat numbers) | `text-4xl font-bold` + tabular-nums | 36px. Body weight, calorie targets. |
+| H1 (screen title) | `text-3xl font-bold` | 30px. "Workouts", "Body", greeting line. |
+| H2 (card title) | `text-lg font-semibold` | 18px. "Today's read", "Log today". |
+| Body | `text-base` | 16px. Coach paragraphs, list rows. |
+| Body small | `text-sm` | 14px. Secondary content. |
+| Section label | `text-xs font-bold uppercase` + `letterSpacing: 0.8` | 12px. Above sections, all-caps. |
+| Caption | `text-xs` | 12px. Timestamps, "+N more sets". |
 
-## Component Patterns
+**Tabular numerals are mandatory** for any rendered number. Use the shared constant:
 
-### Stats Row (Dashboard)
-- Inline layout, NO card wrapper
-- Large display number + small label below
-- Change indicator (arrow + accent/danger color)
+```ts
+const NUM_STYLE = { fontVariant: ['tabular-nums'] as const };
+```
 
-### Suggestion Banner
-- accent-dim background (#00E67633)
-- Left icon + body text
-- NOT a card. Distinct from other content.
+## Spacing rhythm
 
-### Set Table (Workout Logger)
-- Dense rows, alternating subtle background (surface / surface-alt)
-- Columns: Set # | Previous | Weight x Reps | RPE | Checkmark
-- "Previous" column shows last session's data for autofill reference
-- Stepper controls for weight/reps, chip selector for RPE
+4pt scale, used as Tailwind classes:
 
-### Workout History Card
-- surface-alt background
-- Exercise name (title weight), sets as subtitle
-- Date + duration in caption
-- Cards only here because each represents a tappable object
+| Token | Class | Use |
+|---|---|---|
+| 1 (4) | `p-1`, `gap-1` | Tight icon offsets |
+| 2 (8) | `p-2`, `gap-2` | Inline groups |
+| 3 (12) | `p-3`, `gap-3` | Form field gaps |
+| 4 (16) | `p-4`, `gap-4` | Inside small cards |
+| 5 (20) | `p-5`, `gap-5` | Inside hero/elevated cards, screen horizontal padding |
+| 8 (32) | `mb-8` | Section separation between header and content |
+| 10 (40) | `mb-10` | Section separation between major sections |
 
-### Bottom Sheet (Exercise Picker)
-- surface-alt background
-- Drag handle (lg radius)
-- Search input at top
-- Recent exercises first, then alphabetical with muscle group filters
+**Vertical rhythm rules:**
+- Screen horizontal padding: `px-5` (20px). Never `p-4`.
+- Sections separated by `mb-10` (40px) or hairline `border-t border-ink-hairline pt-5`.
+- Inside cards: `p-5` for elevated, `p-4` for standard.
+- Form field gap: `mb-3`.
 
-### Quick Action Buttons
-- Outlined style (not filled) with icon
-- Accent border color
-- "Log Workout", "Log Weight" on dashboard
+## Layout
 
-## Navigation
-- Bottom tab bar: 4 tabs (Dashboard, Workouts, Body, Nutrition)
-- Analytics merged into Body and Workouts screens
-- Settings accessible via gear icon on Dashboard header
+- **Safe-area insets always.** Top padding via `useSafeAreaInsets()` + `paddingTop: insets.top + 16`. Never `pt-14`.
+- **Screens are flat.** Sections are separated by hairline top borders or vertical space, not by wrapping each section in a card.
+- **Cards are reserved** for: forms (Log today, Add meal), the Coach hero card, and modal sheets. A list of items is a list, not a grid of cards.
+- **Hero card pattern** (Coach only): `rounded-2xl border border-ink-hairline bg-ink-elevated p-5`. Nothing else uses `bg-ink-elevated`.
+- **Standard card pattern**: `rounded-2xl border border-ink-hairline bg-ink-card p-5`.
+- **Section headers** sit above sections as small uppercase labels (`SectionLabel` helper in dashboard).
 
-## Empty States
+## Border radius
+
+| Token | Class | Use |
+|---|---|---|
+| sm | `rounded-lg` (8) | Pills, set-row inputs |
+| md | `rounded-xl` (12) | TextInputs, small chips |
+| lg | `rounded-2xl` (16) | Cards, hero card, FAB-adjacent surfaces |
+| xl | `rounded-3xl` (24) | Bottom sheets |
+| full | `rounded-full` | Verdict pill, segmented chips, FAB |
+
+## Buttons
+
+Real hierarchy. Defined in `src/components/ui/button.tsx`:
+
+| Variant | Use | Visual |
+|---|---|---|
+| `primary` | THE action of the screen | `bg-success-500` filled, black label, bold |
+| `tonal` | Secondary action paired with primary | `bg-charcoal-850` filled, white label |
+| `outline` | Tertiary, status-bearing (Cancel) | Hairline border, colored label |
+| `ghost` | Modal close, dismiss | Transparent, muted label |
+| `destructive` | Delete, irreversible | `bg-red-600`, white label |
+
+**Rule of one primary.** Each screen has at most one filled primary button visible at a time. If two actions are equally important, pair `primary` + `tonal`. Never two `primary`s side by side.
+
+## Component patterns
+
+### Stat row (Dashboard)
+Flat row, no card. Big mono numbers (`text-4xl font-bold` + tabular-nums) with small captions below. Delta deltas inline in caption with semantic color.
+
+### Coach hero card
+Only thing using `bg-ink-elevated`. Has section label "COACH" above it. Sections inside ("What you've been doing", "How it's going", "What to do next") are uppercase mini-labels in `text-ink-faint` with body in `text-ink-text`. Verdict pill in top-right.
+
+### Verdict pill
+`rounded-full` with bordered fill at 15% opacity. Color matches verdict semantic (success/danger/neutral).
+
+### Set table (Workout logger)
+Dense flat rows. Columns: Set # | Previous | Weight input | Reps input. Inputs are `rounded-lg border border-ink-hairline bg-ink-card` with tabular-nums. "Fill from set 1" is a hairline-bordered pill.
+
+### Rest timer floating bar
+`absolute inset-x-5` with `bottom: insets.bottom + 12`. Two states: idle (hairline border, neutral) and running (filled accent green, big tabular-nums countdown). Skip is a plain pressable on the right.
+
+### Exercise picker bottom sheet
+`rounded-t-3xl border-t border-ink-hairline bg-ink-card`. Top has a centered `h-1 w-10 rounded-full bg-ink-hairline` drag handle. Filter chips use bordered-vs-filled pattern (active = filled accent, inactive = `border-ink-hairline`). Result list uses `ItemSeparatorComponent` hairlines, no per-item cards.
+
+### Macro bar (Nutrition)
+Section label above, `current / target unit` to the right with mono current. Track `h-1.5 bg-ink-hairline rounded-full`, fill colored per macro.
+
+### History list
+Flat list with `border-t border-ink-hairline` on each row except the first. Date on left in `text-ink-faint`, primary value on right in `text-ink-text` + tabular-nums.
+
+## Motion (roadmap)
+
+The current refresh ships with zero added motion to keep the diff safe. Next pass:
+- Screen mount: 200ms ease-out fade-in via `Animated`
+- Set checkmark: spring scale via Reanimated
+- Rest timer: SVG ring countdown
+- PR celebration: scale + fade 400ms
+- Easing tokens: enter (ease-out), exit (ease-in), move (ease-in-out)
+
+## Empty states
+
 Every empty state must include:
-1. A warm, human message (not "No data found")
-2. A primary action button
-3. Context for what will appear once data exists
+1. A warm, human one-liner ("No workouts yet.")
+2. A clarifying second line about what will appear ("Start your first session — your history will live here.")
+3. If applicable, a primary CTA
 
-## Celebrations
-- Personal records: brief inline acknowledgment card
-- Weight milestones: notification-style banner
-- No badges, points, or gamification. Just recognition.
+Use `bg-ink-card` with `border-ink-hairline` wrapper, centered text.
 
-## First Launch
-- Progressive disclosure (no onboarding wizard)
-- Empty dashboard with single highlighted CTA: "Log your first weigh-in"
-- Dashboard fills up organically as user adds data
+## Anti-patterns (don't)
+
+- **Don't** wrap every section in `rounded-xl bg-charcoal-900 p-4`. The card is the exception, not the default.
+- **Don't** use accent green on borders, dividers, section labels, or decorative elements. Accent is for verbs.
+- **Don't** use `pt-14` or hardcoded top padding. Use safe-area insets.
+- **Don't** render numbers without `NUM_STYLE` (tabular-nums). Stats jitter without it.
+- **Don't** use two filled primary buttons next to each other. Pair `primary` + `tonal`.
+- **Don't** introduce new font sizes outside the type scale.
+- **Don't** introduce new color tokens; extend `@theme` in `global.css` and document here.
+- **Don't** dynamically build Tailwind classes (`bg-${variant}-500`). NativeWind extracts statically — use full literal class strings.
+
+## Migration status (2026-04-08)
+
+Refactored to the new system:
+- `src/features/dashboard/dashboard-screen.tsx` — full rewrite, canonical example
+- `src/features/workouts/workouts-screen.tsx` — targeted refactor (logger, history, modal, FAB)
+- `src/features/body/body-screen.tsx` — targeted refactor
+- `src/features/nutrition/nutrition-screen.tsx` — targeted refactor
+- `src/components/ui/button.tsx` — added `primary` and `tonal` variants
+- `src/global.css` — added `ink-*` tokens
+
+Not yet migrated (still on legacy `charcoal-*` / pre-system patterns):
+- `src/features/profile/profile-setup-screen.tsx`
+- `src/features/settings/*`
+- `src/components/ui/*` (form inputs, list, etc.)
+- `src/app/_layout.tsx` ErrorBoundary
+
+## Decisions log
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-04-08 | Adopted "Quiet instrument" thesis, ink palette, accent budget, hero card pattern, real button hierarchy, safe-area insets, tabular-nums everywhere | Audit found existing DESIGN.md was fictional (claimed RN Paper / Roboto / `#00E676` — actual app is NativeWind / Inter / `#22C55E`). Refresh aligns docs with reality and modernizes the system. |

@@ -1,10 +1,12 @@
+import type { TextStyle } from 'react-native';
 import type { CoachInsight } from '@/lib/ai/llm-client';
-import type { Suggestion, WorkoutSetWithExercise } from '@/lib/types';
 
+import type { Suggestion, WorkoutSetWithExercise } from '@/lib/types';
 import { useRouter } from 'expo-router';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { SimpleChart } from '@/features/body/components/simple-chart';
@@ -17,8 +19,12 @@ import { expoDb } from '@/lib/db';
 import { calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 import { formatLength, formatWeight, kgToLbs } from '@/lib/units';
 
+// Tabular numerals for any number rendered in stats — keeps columns aligned.
+const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
+
 export function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useUserStore.use.user();
   const loadBody = useBodyStore(s => s.loadData);
   const latest = useBodyStore.use.latest();
@@ -60,18 +66,17 @@ export function DashboardScreen() {
 
   if (!user) {
     return (
-      <View className="flex-1 items-center justify-center bg-charcoal-950 px-8">
-        <Text className="mb-4 text-center text-3xl font-bold text-white">
+      <View className="flex-1 items-center justify-center bg-ink-base px-8">
+        <Text className="mb-3 text-center text-3xl font-bold text-ink-text">
           Welcome to Gym
         </Text>
-        <Text className="mb-8 text-center text-base text-charcoal-400">
-          Your personal fitness intelligence system. Let's set up your profile to get started.
+        <Text className="mb-8 text-center text-base text-ink-muted">
+          Your personal fitness instrument. Set up your profile to get started.
         </Text>
         <Button
           label="Get Started"
+          variant="primary"
           onPress={() => router.push('/(app)/settings' as any)}
-          className="bg-success-500"
-          textClassName="text-black font-bold"
         />
       </View>
     );
@@ -91,82 +96,117 @@ export function DashboardScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-charcoal-950"
-      contentContainerClassName="p-4 pb-8 pt-14"
+      className="flex-1 bg-ink-base"
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32 }}
+      contentContainerClassName="px-5"
       refreshControl={<RefreshControl refreshing={false} onRefresh={loadAll} tintColor="#22C55E" />}
     >
-      {/* Greeting */}
-      <Text className="text-xl font-bold text-white">
+      {/* Header */}
+      <Text className="text-3xl font-bold text-ink-text">
         {greeting}
         ,
+        {' '}
         {user.name}
       </Text>
-      <Text className="mb-6 text-sm text-charcoal-400">
+      <Text className="mt-1 mb-8 text-sm text-ink-faint">
         {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
       </Text>
 
-      {/* Stats Row */}
+      {/* Stats — flat hero row, no card */}
       {latest
         ? (
-            <View className="mb-4 flex-row items-center justify-around py-4">
+            <View className="mb-10 flex-row items-end justify-between">
               {latest.weight != null && (
-                <View className="items-center">
-                  <Text className="text-3xl font-bold text-white">
-                    {formatWeight(latest.weight, units).split(' ')[0]}
-                  </Text>
-                  <Text className="text-sm text-charcoal-400">
-                    {units === 'metric' ? 'kg' : 'lbs'}
-                    {weeklyChange !== null && (
-                      <Text className={weeklyChange <= 0 ? 'text-success-500' : 'text-danger-500'}>
-                        {' '}
-                        {weeklyChange > 0 ? '+' : ''}
-                        {weeklyChange}
-                      </Text>
-                    )}
-                  </Text>
-                </View>
+                <Stat
+                  value={formatWeight(latest.weight, units).split(' ')[0]}
+                  unit={units === 'metric' ? 'kg' : 'lbs'}
+                  delta={weeklyChange}
+                />
               )}
-              {latest.weight != null && latest.waist != null && <View className="h-10 w-px bg-charcoal-700" />}
               {latest.waist != null && (
-                <View className="items-center">
-                  <Text className="text-3xl font-bold text-white">
-                    {formatLength(latest.waist, units).split(' ')[0]}
-                  </Text>
-                  <Text className="text-sm text-charcoal-400">
-                    {units === 'metric' ? 'cm' : 'in'}
-                    {' '}
-                    waist
-                  </Text>
-                </View>
+                <Stat
+                  value={formatLength(latest.waist, units).split(' ')[0]}
+                  unit={units === 'metric' ? 'cm waist' : 'in waist'}
+                />
               )}
-              <View className="h-10 w-px bg-charcoal-700" />
-              <View className="items-center">
-                <Text className="text-3xl font-bold text-white">{targetCals}</Text>
-                <Text className="text-sm text-charcoal-400">kcal target</Text>
-              </View>
+              <Stat value={String(targetCals)} unit="kcal target" />
             </View>
           )
         : (
-            <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
-              <Text className="mb-4 text-center text-charcoal-400">
-                Log your first weigh-in to see your stats here
+            <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-card p-6">
+              <Text className="mb-4 text-center text-ink-muted">
+                Log your first weigh-in to see your stats here.
               </Text>
               <Button
                 label="Log Weight"
-                variant="outline"
+                variant="primary"
                 onPress={() => router.push('/(app)/body' as any)}
-                className="border-success-500"
-                textClassName="text-success-500"
               />
             </View>
           )}
 
-      {/* Weight Progress Chart */}
+      {/* Coach — hero card, elevated + hairline border, distinct from everything else */}
+      <SectionLabel>Coach</SectionLabel>
+      {insight
+        ? (
+            <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-elevated p-5">
+              <View className="mb-4 flex-row items-center justify-between">
+                <Text className="text-lg font-semibold text-ink-text">Today's read</Text>
+                <VerdictPill verdict={insight.verdict} />
+              </View>
+              {insight.past
+                ? (
+                    <CoachBlock label="What you've been doing" body={insight.past} />
+                  )
+                : null}
+              {insight.present
+                ? (
+                    <CoachBlock label="How it's going" body={insight.present} />
+                  )
+                : null}
+              {insight.next.length > 0 && (
+                <View>
+                  <Text className="mb-1 text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.5 }}>
+                    What to do next
+                  </Text>
+                  {insight.next.map(item => (
+                    <Text key={item} className="mt-1 text-base text-ink-text">
+                      •
+                      {' '}
+                      {item}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </View>
+          )
+        : insightLoading
+          ? (
+              <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-elevated p-5">
+                <Text className="text-sm text-ink-muted">Coach is analyzing your data…</Text>
+              </View>
+            )
+          : topSuggestion
+            ? (
+                <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-elevated p-5">
+                  <Text className="mb-1 text-base font-semibold text-ink-text">{topSuggestion.title}</Text>
+                  <Text className="text-sm text-ink-muted">{topSuggestion.body}</Text>
+                </View>
+              )
+            : (
+                <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-elevated p-5">
+                  <Text className="text-sm text-ink-muted">
+                    Log a few workouts and weigh-ins. The coach will start reading your data once there's enough signal.
+                  </Text>
+                </View>
+              )}
+
+      {/* Weight progress — flat, with hairline top border */}
       {weightTrend.length >= 2 && (
-        <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
-          <View className="mb-2 flex-row items-center justify-between">
-            <Text className="text-base font-semibold text-white">Weight progress</Text>
-            <Text className="text-xs text-charcoal-400">
+        <View className="mb-10 border-t border-ink-hairline pt-5">
+          <View className="mb-3 flex-row items-baseline justify-between">
+            <SectionLabel>Weight progress</SectionLabel>
+            <Text className="text-xs text-ink-faint" style={NUM_STYLE}>
               last
               {' '}
               {weightTrend.length}
@@ -184,128 +224,124 @@ export function DashboardScreen() {
         </View>
       )}
 
-      {/* Coach Insight */}
-      {insight
-        ? (
-            <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
-              <View className="mb-3 flex-row items-center justify-between">
-                <Text className="text-base font-semibold text-white">Coach</Text>
-                <VerdictPill verdict={insight.verdict} />
-              </View>
-              {insight.past
-                ? (
-                    <View className="mb-3">
-                      <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">What you've been doing</Text>
-                      <Text className="text-sm text-charcoal-100">{insight.past}</Text>
-                    </View>
-                  )
-                : null}
-              {insight.present
-                ? (
-                    <View className="mb-3">
-                      <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">How it's going</Text>
-                      <Text className="text-sm text-charcoal-100">{insight.present}</Text>
-                    </View>
-                  )
-                : null}
-              {insight.next.length > 0 && (
-                <View>
-                  <Text className="mb-0.5 text-xs font-bold text-charcoal-400 uppercase">What to do next</Text>
-                  {insight.next.map(item => (
-                    <Text key={item} className="mt-0.5 text-sm text-charcoal-100">
-                      •
-                      {' '}
-                      {item}
-                    </Text>
-                  ))}
-                </View>
-              )}
-            </View>
-          )
-        : insightLoading
+      {/* Last workout — flat list, no card */}
+      <View className="mb-10 border-t border-ink-hairline pt-5">
+        <View className="mb-3 flex-row items-baseline justify-between">
+          <SectionLabel>Last workout</SectionLabel>
+          {lastSession && (
+            <Text className="text-xs text-ink-faint">
+              {formatRelativeDate(lastSession.date)}
+            </Text>
+          )}
+        </View>
+        {lastSession
           ? (
-              <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
-                <Text className="text-sm text-charcoal-400">Coach is analyzing your data…</Text>
+              <View>
+                {lastWorkoutSets.slice(0, 3).map(set => (
+                  <View key={set.id} className="flex-row items-center justify-between py-1.5">
+                    <Text className="text-base text-ink-text">{set.exercise_name}</Text>
+                    <Text className="text-base text-ink-muted" style={NUM_STYLE}>
+                      {formatWeight(set.weight, units).split(' ')[0]}
+                      {' × '}
+                      {set.reps}
+                    </Text>
+                  </View>
+                ))}
+                {lastWorkoutSets.length > 3 && (
+                  <Text className="mt-1 text-xs text-ink-faint">
+                    +
+                    {lastWorkoutSets.length - 3}
+                    {' '}
+                    more sets
+                  </Text>
+                )}
               </View>
             )
-          : topSuggestion
-            ? (
-                <View className="mb-4 rounded-xl bg-success-500/20 p-4">
-                  <Text className="mb-1 text-sm font-bold text-success-500">{topSuggestion.title}</Text>
-                  <Text className="text-sm text-white">{topSuggestion.body}</Text>
-                </View>
-              )
-            : null}
-
-      {/* Last Workout */}
-      {lastSession
-        ? (
-            <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
-              <View className="mb-2 flex-row items-center justify-between">
-                <Text className="text-base font-semibold text-white">Last Workout</Text>
-                <Text className="text-xs text-charcoal-400">
-                  {formatRelativeDate(lastSession.date)}
-                </Text>
-              </View>
-              {lastWorkoutSets.slice(0, 3).map(set => (
-                <Text key={set.id} className="mb-1 text-sm text-charcoal-200">
-                  {set.exercise_name}
-                  {' '}
-                  {formatWeight(set.weight, units).split(' ')[0]}
-                  ×
-                  {set.reps}
-                </Text>
-              ))}
-              {lastWorkoutSets.length > 3 && (
-                <Text className="text-xs text-charcoal-400">
-                  +
-                  {lastWorkoutSets.length - 3}
-                  {' '}
-                  more sets
-                </Text>
-              )}
-            </View>
-          )
-        : (
-            <View className="mb-4 items-center rounded-xl bg-charcoal-900 p-6">
-              <Text className="text-center text-charcoal-400">
-                No workouts yet. Start your first session!
+          : (
+              <Text className="text-sm text-ink-muted">
+                No workouts yet. Start your first session.
               </Text>
-            </View>
-          )}
+            )}
+      </View>
 
-      {/* Quick Actions */}
-      <View className="mt-2 flex-row gap-4">
-        <Button
-          label="Log Workout"
-          variant="outline"
-          onPress={() => router.push('/(app)/workouts' as any)}
-          className="flex-1 border-success-500"
-          textClassName="text-success-500"
-        />
-        <Button
-          label="Log Weight"
-          variant="outline"
-          onPress={() => router.push('/(app)/body' as any)}
-          className="flex-1 border-success-500"
-          textClassName="text-success-500"
-        />
+      {/* Quick actions — real hierarchy: one primary, one tonal */}
+      <View className="flex-row gap-3">
+        <View className="flex-1">
+          <Button
+            label="Log Workout"
+            variant="primary"
+            onPress={() => router.push('/(app)/workouts' as any)}
+          />
+        </View>
+        <View className="flex-1">
+          <Button
+            label="Log Weight"
+            variant="tonal"
+            onPress={() => router.push('/(app)/body' as any)}
+          />
+        </View>
       </View>
     </ScrollView>
   );
 }
 
+function Stat({ value, unit, delta }: { value: string; unit: string; delta?: number | null }) {
+  return (
+    <View>
+      <Text className="text-4xl font-bold text-ink-text" style={NUM_STYLE}>{value}</Text>
+      <Text className="mt-1 text-xs text-ink-faint">
+        {unit}
+        {delta != null && delta !== 0 && (
+          <Text
+            className={delta < 0 ? 'text-success-500' : 'text-danger-400'}
+            style={NUM_STYLE}
+          >
+            {'  '}
+            {delta > 0 ? '+' : ''}
+            {delta}
+          </Text>
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Text
+      className="text-xs font-bold text-ink-faint uppercase"
+      style={{ letterSpacing: 0.8 }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function CoachBlock({ label, body }: { label: string; body: string }) {
+  return (
+    <View className="mb-4">
+      <Text
+        className="mb-1 text-xs font-bold text-ink-faint uppercase"
+        style={{ letterSpacing: 0.5 }}
+      >
+        {label}
+      </Text>
+      <Text className="text-base text-ink-text">{body}</Text>
+    </View>
+  );
+}
+
 function VerdictPill({ verdict }: { verdict: CoachInsight['verdict'] }) {
   const map = {
-    good: { label: 'On track', cls: 'bg-success-500/20 text-success-500' },
-    bad: { label: 'Off track', cls: 'bg-danger-500/20 text-danger-500' },
-    steady: { label: 'Steady', cls: 'bg-charcoal-700 text-charcoal-200' },
-    unknown: { label: 'Need data', cls: 'bg-charcoal-700 text-charcoal-300' },
+    good: { label: 'On track', container: 'bg-success-500/15 border-success-500/40', text: 'text-success-500' },
+    bad: { label: 'Off track', container: 'bg-danger-500/15 border-danger-500/40', text: 'text-danger-400' },
+    steady: { label: 'Steady', container: 'bg-ink-hairline border-ink-hairline', text: 'text-ink-muted' },
+    unknown: { label: 'Need data', container: 'bg-ink-hairline border-ink-hairline', text: 'text-ink-faint' },
   };
-  const { label, cls } = map[verdict];
+  const { label, container, text } = map[verdict];
   return (
-    <View className={`rounded-full px-2 py-0.5 ${cls.split(' ')[0]}`}>
-      <Text className={`text-xs font-bold ${cls.split(' ')[1]}`}>{label}</Text>
+    <View className={`rounded-full border px-2.5 py-1 ${container}`}>
+      <Text className={`text-xs font-bold ${text}`}>{label}</Text>
     </View>
   );
 }

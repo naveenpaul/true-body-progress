@@ -1,8 +1,10 @@
-import type { NutritionEntry } from '@/lib/types';
+import type { TextStyle } from 'react-native';
 
+import type { NutritionEntry } from '@/lib/types';
 import * as React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useBodyStore } from '@/features/body/use-body-store';
@@ -12,7 +14,10 @@ import { expoDb } from '@/lib/db';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { calculateMacroTargets, calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 
+const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
+
 export function NutritionScreen() {
+  const insets = useSafeAreaInsets();
   const user = useUserStore.use.user();
   const latest = useBodyStore.use.latest();
 
@@ -118,37 +123,39 @@ export function NutritionScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-charcoal-950"
-      contentContainerClassName="p-4 pb-10 pt-14"
+      className="flex-1 bg-ink-base"
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40 }}
+      contentContainerClassName="px-5"
       refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
     >
-      <Text className="mb-4 text-2xl font-bold text-white">Nutrition</Text>
+      <Text className="mb-1 text-3xl font-bold text-ink-text">Nutrition</Text>
+      <Text className="mb-8 text-sm text-ink-faint">Today</Text>
 
       {/* Daily Summary - Macro Bars */}
-      <View className="mb-6">
+      <View className="mb-10">
         <MacroBar label="Calories" current={Math.round(totals.calories)} target={targetCals} color="#22C55E" unit="kcal" />
-        <MacroBar label="Protein" current={Math.round(totals.protein)} target={macroTargets.protein} color="#FF6B6B" unit="g" />
-        <MacroBar label="Carbs" current={Math.round(totals.carbs)} target={macroTargets.carbs} color="#4ECDC4" unit="g" />
-        <MacroBar label="Fats" current={Math.round(totals.fats)} target={macroTargets.fats} color="#FFE66D" unit="g" />
+        <MacroBar label="Protein" current={Math.round(totals.protein)} target={macroTargets.protein} color="#F87171" unit="g" />
+        <MacroBar label="Carbs" current={Math.round(totals.carbs)} target={macroTargets.carbs} color="#60A5FA" unit="g" />
+        <MacroBar label="Fats" current={Math.round(totals.fats)} target={macroTargets.fats} color="#FBBF24" unit="g" />
       </View>
 
       {/* Meals Section */}
-      <View className="mb-6">
-        <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-sm font-semibold text-white">Today's Meals</Text>
+      <View>
+        <View className="mb-3 flex-row items-baseline justify-between">
+          <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Today's meals</Text>
           <Pressable onPress={() => setShowForm(!showForm)}>
-            <Text className="text-sm text-success-500">{showForm ? 'Cancel' : '+ Add Meal'}</Text>
+            <Text className="text-sm font-semibold text-success-500">{showForm ? 'Cancel' : '+ Add meal'}</Text>
           </Pressable>
         </View>
 
         {showForm && (
-          <View className="mb-4 rounded-xl bg-charcoal-900 p-4">
+          <View className="mb-5 rounded-2xl border border-ink-hairline bg-ink-card p-5">
             <TextInput
               placeholder="Meal name (e.g. Chicken breast 200g)"
               value={mealName}
               onChangeText={setMealName}
-              className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-              placeholderTextColor="#7D7D7D"
+              className="mb-3 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+              placeholderTextColor="#71717A"
             />
             <View className="mb-3 flex-row gap-3">
               <TextInput
@@ -156,76 +163,80 @@ export function NutritionScreen() {
                 keyboardType="numeric"
                 value={calories}
                 onChangeText={setCalories}
-                className="flex-1 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-                placeholderTextColor="#7D7D7D"
+                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+                style={NUM_STYLE}
+                placeholderTextColor="#71717A"
               />
               <TextInput
                 placeholder="Protein"
                 keyboardType="numeric"
                 value={protein}
                 onChangeText={setProtein}
-                className="flex-1 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-                placeholderTextColor="#7D7D7D"
+                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+                style={NUM_STYLE}
+                placeholderTextColor="#71717A"
               />
             </View>
-            <View className="mb-3 flex-row gap-3">
+            <View className="mb-4 flex-row gap-3">
               <TextInput
                 placeholder="Carbs"
                 keyboardType="numeric"
                 value={carbs}
                 onChangeText={setCarbs}
-                className="flex-1 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-                placeholderTextColor="#7D7D7D"
+                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+                style={NUM_STYLE}
+                placeholderTextColor="#71717A"
               />
               <TextInput
                 placeholder="Fats"
                 keyboardType="numeric"
                 value={fats}
                 onChangeText={setFats}
-                className="flex-1 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-                placeholderTextColor="#7D7D7D"
+                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+                style={NUM_STYLE}
+                placeholderTextColor="#71717A"
               />
             </View>
             {saveError && (
-              <Text className="mb-2 text-sm text-danger-500">{saveError}</Text>
+              <Text className="mb-3 text-sm text-danger-400">{saveError}</Text>
             )}
             <Button
-              label={saving ? 'Saving...' : 'Save Meal'}
+              label={saving ? 'Saving…' : 'Save meal'}
+              variant="primary"
               onPress={handleSave}
               disabled={!mealName || !calories || saving}
-              className="bg-success-500"
-              textClassName="text-black font-bold"
             />
           </View>
         )}
 
         {meals.length === 0 && !showForm
           ? (
-              <View className="items-center rounded-xl bg-charcoal-900 p-6">
-                <Text className="text-center text-charcoal-400">
-                  No meals logged today. Tap + Add Meal to start tracking.
+              <View className="rounded-2xl border border-ink-hairline bg-ink-card p-6">
+                <Text className="text-center text-sm text-ink-muted">
+                  No meals logged today. Tap "+ Add meal" to start.
                 </Text>
               </View>
             )
           : (
-              meals.map(meal => (
-                <View key={meal.id} className="mb-1 flex-row items-center rounded-lg bg-charcoal-900 p-3">
+              meals.map((meal, idx) => (
+                <View key={meal.id} className={`flex-row items-center py-3 ${idx > 0 ? 'border-t border-ink-hairline' : ''}`}>
                   <View className="flex-1">
-                    <Text className="text-base text-white">{meal.meal_name}</Text>
-                    <Text className="text-xs text-charcoal-400">
+                    <Text className="text-base text-ink-text">{meal.meal_name}</Text>
+                    <Text className="mt-0.5 text-xs text-ink-faint" style={NUM_STYLE}>
                       {meal.calories}
-                      {' '}
-                      kcal ·
+                      {' kcal · '}
                       {meal.protein}
-                      g P ·
+                      P ·
+                      {' '}
                       {meal.carbs}
-                      g C ·
+                      C ·
+                      {' '}
                       {meal.fats}
-                      g F
+                      F
                     </Text>
                   </View>
                   <Pressable onPress={() => handleDelete(meal.id)} className="p-2">
-                    <Text className="text-charcoal-500">✕</Text>
+                    <Text className="text-ink-faint">✕</Text>
                   </Pressable>
                 </View>
               ))
@@ -244,21 +255,20 @@ function MacroBar({ label, current, target, color, unit }: {
 }) {
   const progress = Math.min(current / target, 1);
   return (
-    <View className="mb-4">
-      <View className="mb-1 flex-row justify-between">
-        <Text className="text-xs text-charcoal-400">{label}</Text>
-        <Text className="text-xs">
-          <Text className="font-bold text-white">{current}</Text>
-          <Text className="text-charcoal-400">
-            {' '}
-            /
+    <View className="mb-5">
+      <View className="mb-2 flex-row items-baseline justify-between">
+        <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>{label}</Text>
+        <Text className="text-sm" style={{ fontVariant: ['tabular-nums'] }}>
+          <Text className="font-bold text-ink-text">{current}</Text>
+          <Text className="text-ink-faint">
+            {' / '}
             {target}
             {' '}
             {unit}
           </Text>
         </Text>
       </View>
-      <View className="h-2 overflow-hidden rounded-full bg-charcoal-800">
+      <View className="h-1.5 overflow-hidden rounded-full bg-ink-hairline">
         <View
           style={{ width: `${progress * 100}%`, backgroundColor: color }}
           className="h-full rounded-full"

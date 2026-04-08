@@ -1,8 +1,10 @@
-import type { WorkoutSetWithExercise } from '@/lib/types';
+import type { TextStyle } from 'react-native';
 
+import type { WorkoutSetWithExercise } from '@/lib/types';
 import * as React from 'react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { FlatList, Modal, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useUserStore } from '@/features/profile/use-user-store';
@@ -10,6 +12,8 @@ import { formatRelativeDate } from '@/lib/dates';
 import { formatWeight, kgToLbs, lbsToKg } from '@/lib/units';
 
 import { useWorkoutStore } from './use-workout-store';
+
+const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
 
 function sessionSetsReducer(
   _: WorkoutSetWithExercise[],
@@ -27,6 +31,7 @@ function sessionSetsReducer(
 
 // eslint-disable-next-line max-lines-per-function
 export function WorkoutsScreen() {
+  const insets = useSafeAreaInsets();
   const user = useUserStore.use.user();
   const units = user?.preferred_units ?? 'metric';
   const isActive = useWorkoutStore.use.isActive();
@@ -159,37 +164,40 @@ export function WorkoutsScreen() {
 
   if (isActive) {
     return (
-      <View className="flex-1 bg-charcoal-950">
+      <View className="flex-1 bg-ink-base">
         {/* Active Header */}
-        <View className="flex-row items-center justify-between bg-charcoal-900 px-4 pt-14 pb-4">
-          <Text className="text-xl font-bold text-white">Active Workout</Text>
+        <View
+          className="flex-row items-center justify-between border-b border-ink-hairline bg-ink-card px-5 pb-4"
+          style={{ paddingTop: insets.top + 12 }}
+        >
+          <Text className="text-2xl font-bold text-ink-text">Active workout</Text>
           <View className="flex-row gap-2">
-            <Button label="Cancel" variant="outline" size="sm" onPress={cancelWorkout} className="border-danger-500" textClassName="text-danger-500" />
-            <Button label="Save" size="sm" onPress={handleSave} className="bg-success-500" textClassName="text-black font-bold" />
+            <Button label="Cancel" variant="outline" size="sm" onPress={cancelWorkout} fullWidth={false} className="border-danger-400" textClassName="text-danger-400" />
+            <Button label="Save" variant="primary" size="sm" fullWidth={false} onPress={handleSave} />
           </View>
         </View>
 
-        <ScrollView contentContainerClassName="p-4 pb-20">
+        <ScrollView contentContainerClassName="p-5 pb-24">
           {exerciseGroups.map(group => (
-            <View key={group.exerciseId} className="mb-6">
-              <View className="mb-2 flex-row items-center justify-between">
-                <Text className="text-base font-bold text-white">{group.exerciseName}</Text>
+            <View key={group.exerciseId} className="mb-8">
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-lg font-semibold text-ink-text">{group.exerciseName}</Text>
                 {group.sets.length > 1 && (
                   <Pressable
                     onPress={() => copyFirstSetToAll(group.exerciseId)}
-                    className="rounded-md bg-charcoal-800 px-3 py-1"
+                    className="rounded-full border border-ink-hairline px-3 py-1"
                   >
-                    <Text className="text-xs text-charcoal-200">Fill from set 1</Text>
+                    <Text className="text-xs text-ink-muted">Fill from set 1</Text>
                   </Pressable>
                 )}
               </View>
 
               {/* Header */}
               <View className="mb-1 flex-row items-center px-2">
-                <Text className="w-10 text-center text-xs font-bold text-charcoal-400">Set</Text>
-                <Text className="flex-1 text-center text-xs font-bold text-charcoal-400">Previous</Text>
-                <Text className="w-20 text-center text-xs font-bold text-charcoal-400">{units === 'imperial' ? 'lbs' : 'kg'}</Text>
-                <Text className="w-20 text-center text-xs font-bold text-charcoal-400">reps</Text>
+                <Text className="w-10 text-center text-[11px] font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.5 }}>Set</Text>
+                <Text className="flex-1 text-center text-[11px] font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.5 }}>Previous</Text>
+                <Text className="w-20 text-center text-[11px] font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.5 }}>{units === 'imperial' ? 'lbs' : 'kg'}</Text>
+                <Text className="w-20 text-center text-[11px] font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.5 }}>reps</Text>
               </View>
 
               {group.sets.map((set) => {
@@ -197,15 +205,15 @@ export function WorkoutsScreen() {
                 return (
                   <View
                     key={globalIndex}
-                    className="mb-0.5 flex-row items-center rounded-lg p-2"
+                    className="mb-1 flex-row items-center rounded-lg p-2"
                   >
-                    <Text className="w-8 text-center text-sm text-white">{set.set_number}</Text>
-                    <Text className="flex-1 text-center text-sm text-charcoal-400">
+                    <Text className="w-10 text-center text-base text-ink-text" style={NUM_STYLE}>{set.set_number}</Text>
+                    <Text className="flex-1 text-center text-sm text-ink-faint" style={NUM_STYLE}>
                       {set.prev_weight != null && set.prev_reps != null
-                        ? `${units === 'imperial' ? kgToLbs(set.prev_weight) : set.prev_weight}×${set.prev_reps}`
-                        : '-'}
+                        ? `${units === 'imperial' ? kgToLbs(set.prev_weight) : set.prev_weight} × ${set.prev_reps}`
+                        : '—'}
                     </Text>
-                    <View className="w-16 items-center">
+                    <View className="w-20 items-center">
                       <TextInput
                         keyboardType="numeric"
                         value={draftFor(
@@ -218,11 +226,12 @@ export function WorkoutsScreen() {
                           updateSet(globalIndex, { weight: units === 'imperial' ? lbsToKg(n) : n });
                         }}
                         onBlur={clearDraft}
-                        className="h-10 w-14 rounded-md bg-charcoal-900 text-center text-base text-white"
-                        placeholderTextColor="#7D7D7D"
+                        className="h-11 w-16 rounded-lg border border-ink-hairline bg-ink-card text-center text-base text-ink-text"
+                        style={NUM_STYLE}
+                        placeholderTextColor="#71717A"
                       />
                     </View>
-                    <View className="w-16 items-center">
+                    <View className="w-20 items-center">
                       <TextInput
                         keyboardType="numeric"
                         value={draftFor(`${globalIndex}-reps`, set.reps > 0 ? String(set.reps) : '')}
@@ -231,36 +240,39 @@ export function WorkoutsScreen() {
                           updateSet(globalIndex, { reps: parseDraftNum(v) });
                         }}
                         onBlur={clearDraft}
-                        className="h-10 w-14 rounded-md bg-charcoal-900 text-center text-base text-white"
-                        placeholderTextColor="#7D7D7D"
+                        className="h-11 w-16 rounded-lg border border-ink-hairline bg-ink-card text-center text-base text-ink-text"
+                        style={NUM_STYLE}
+                        placeholderTextColor="#71717A"
                       />
                     </View>
                   </View>
                 );
               })}
 
-              <Pressable onPress={() => addSet(group.exerciseId)} className="mt-1 py-1">
-                <Text className="text-center text-sm text-success-500">+ Add Set</Text>
+              <Pressable onPress={() => addSet(group.exerciseId)} className="mt-2 py-2">
+                <Text className="text-center text-sm font-semibold text-success-500">+ Add set</Text>
               </Pressable>
             </View>
           ))}
 
           <Button
-            label="Add Exercise"
-            variant="outline"
+            label="Add exercise"
+            variant="tonal"
             onPress={() => setShowPicker(true)}
-            className="mt-2 border-success-500"
-            textClassName="text-success-500"
+            className="mt-2"
           />
         </ScrollView>
 
         {/* Rest timer floating bar */}
         {restEndsAt
           ? (
-              <View className="absolute inset-x-4 bottom-4 flex-row items-center justify-between rounded-xl bg-success-500 px-4 py-3 shadow-lg">
-                <Text className="text-base font-bold text-black">
-                  Rest:
-                  {' '}
+              <View
+                className="absolute inset-x-5 flex-row items-center justify-between rounded-2xl bg-success-500 px-5 py-4 shadow-lg"
+                style={{ bottom: insets.bottom + 12 }}
+              >
+                <Text className="text-lg font-bold text-black" style={NUM_STYLE}>
+                  Rest
+                  {'  '}
                   {Math.floor(restRemaining / 60)}
                   :
                   {String(restRemaining % 60).padStart(2, '0')}
@@ -271,46 +283,53 @@ export function WorkoutsScreen() {
               </View>
             )
           : (
-              <View className="absolute inset-x-4 bottom-4 flex-row items-center justify-between rounded-xl bg-charcoal-900 px-4 py-3">
+              <View
+                className="absolute inset-x-5 flex-row items-center justify-between rounded-2xl border border-ink-hairline bg-ink-card px-4 py-3"
+                style={{ bottom: insets.bottom + 12 }}
+              >
                 <View className="flex-row items-center gap-3">
                   <Pressable
                     onPress={() => setRestDuration(restDuration - 15)}
-                    className="size-7 items-center justify-center rounded-full bg-charcoal-800"
+                    className="size-8 items-center justify-center rounded-full border border-ink-hairline"
                   >
-                    <Text className="text-base text-white">−</Text>
+                    <Text className="text-base text-ink-text">−</Text>
                   </Pressable>
-                  <Text className="w-12 text-center text-sm font-semibold text-white">
+                  <Text className="w-12 text-center text-base font-semibold text-ink-text" style={NUM_STYLE}>
                     {Math.floor(restDuration / 60)}
                     :
                     {String(restDuration % 60).padStart(2, '0')}
                   </Text>
                   <Pressable
                     onPress={() => setRestDuration(restDuration + 15)}
-                    className="size-7 items-center justify-center rounded-full bg-charcoal-800"
+                    className="size-8 items-center justify-center rounded-full border border-ink-hairline"
                   >
-                    <Text className="text-base text-white">+</Text>
+                    <Text className="text-base text-ink-text">+</Text>
                   </Pressable>
                 </View>
                 <Pressable
                   onPress={startRest}
                   className="rounded-lg bg-success-500 px-4 py-2"
                 >
-                  <Text className="text-sm font-bold text-black">Rest between sets</Text>
+                  <Text className="text-sm font-bold text-black">Start rest</Text>
                 </Pressable>
               </View>
             )}
 
         {/* Exercise Picker Modal */}
         <Modal visible={showPicker} animationType="slide" transparent>
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="max-h-[80%] rounded-t-2xl bg-charcoal-900 p-6">
-              <Text className="mb-4 text-base font-semibold text-white">Add Exercise</Text>
+          <View className="flex-1 justify-end bg-black/60">
+            <View
+              className="max-h-[80%] rounded-t-3xl border-t border-ink-hairline bg-ink-card p-6"
+              style={{ paddingBottom: insets.bottom + 16 }}
+            >
+              <View className="mb-4 h-1 w-10 self-center rounded-full bg-ink-hairline" />
+              <Text className="mb-4 text-xl font-bold text-ink-text">Add exercise</Text>
               <TextInput
-                placeholder="Search exercises..."
+                placeholder="Search exercises…"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-                placeholderTextColor="#7D7D7D"
+                className="mb-4 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+                placeholderTextColor="#71717A"
               />
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4 max-h-10">
@@ -318,9 +337,9 @@ export function WorkoutsScreen() {
                   <Pressable
                     key={mg}
                     onPress={() => setMuscleFilter(muscleFilter === mg ? null : mg)}
-                    className={`mr-2 rounded-full px-3 py-1 ${muscleFilter === mg ? 'bg-success-500' : 'bg-charcoal-800'}`}
+                    className={`mr-2 rounded-full border px-3 py-1.5 ${muscleFilter === mg ? 'border-success-500 bg-success-500' : 'border-ink-hairline bg-transparent'}`}
                   >
-                    <Text className={muscleFilter === mg ? 'text-sm text-black' : 'text-sm text-charcoal-300'}>{mg}</Text>
+                    <Text className={muscleFilter === mg ? 'text-sm font-semibold text-black' : 'text-sm text-ink-muted'}>{mg}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
@@ -329,6 +348,7 @@ export function WorkoutsScreen() {
                 data={filteredExercises}
                 keyExtractor={e => String(e.id)}
                 className="max-h-72"
+                ItemSeparatorComponent={() => <View className="h-px bg-ink-hairline" />}
                 renderItem={({ item }) => (
                   <Pressable
                     onPress={() => {
@@ -337,14 +357,12 @@ export function WorkoutsScreen() {
                       setSearchQuery('');
                       setMuscleFilter(null);
                     }}
-                    className="mb-1 rounded-lg bg-charcoal-950 p-3"
+                    className="py-3"
                   >
-                    <Text className="text-base text-white">{item.name}</Text>
-                    <Text className="text-xs text-charcoal-400">
+                    <Text className="text-base text-ink-text">{item.name}</Text>
+                    <Text className="mt-0.5 text-xs text-ink-faint">
                       {item.primary_muscle_group}
-                      {' '}
-                      ·
-                      {' '}
+                      {' · '}
                       {item.equipment_type}
                     </Text>
                   </Pressable>
@@ -359,8 +377,8 @@ export function WorkoutsScreen() {
                   setSearchQuery('');
                   setMuscleFilter(null);
                 }}
-                className="mt-2"
-                textClassName="text-charcoal-400"
+                className="mt-3"
+                textClassName="text-ink-muted no-underline"
               />
             </View>
           </View>
@@ -371,69 +389,75 @@ export function WorkoutsScreen() {
 
   // History view
   return (
-    <View className="flex-1 bg-charcoal-950">
+    <View className="flex-1 bg-ink-base">
       <ScrollView
-        contentContainerClassName="p-4 pb-20 pt-14"
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 96 }}
+        contentContainerClassName="px-5"
         refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
       >
-        <Text className="mb-4 text-2xl font-bold text-white">Workouts</Text>
+        <Text className="mb-1 text-3xl font-bold text-ink-text">Workouts</Text>
+        <Text className="mb-8 text-sm text-ink-faint">History</Text>
 
         {recentSessions.length === 0
           ? (
-              <View className="items-center rounded-xl bg-charcoal-900 p-8">
-                <Text className="mb-2 text-center text-base text-charcoal-400">
-                  No workouts yet. Start your first session!
+              <View className="rounded-2xl border border-ink-hairline bg-ink-card p-8">
+                <Text className="mb-2 text-center text-base text-ink-text">
+                  No workouts yet.
                 </Text>
-                <Text className="text-center text-sm text-charcoal-500">
-                  Track your exercises, sets, and progress over time.
+                <Text className="text-center text-sm text-ink-muted">
+                  Start your first session — your history will live here.
                 </Text>
               </View>
             )
           : (
-              recentSessions.map(session => (
-                <Pressable
-                  key={session.id}
-                  onPress={() => setExpandedSession(expandedSession === session.id ? null : session.id)}
-                  className="mb-2 rounded-xl bg-charcoal-900 p-4"
-                >
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-base font-medium text-white">{formatRelativeDate(session.date)}</Text>
-                    {session.set_count != null && session.set_count > 0 && (
-                      <Text className="text-xs text-charcoal-400">
-                        {session.set_count}
-                        {' '}
-                        {session.set_count === 1 ? 'set' : 'sets'}
+              <View>
+                {recentSessions.map((session, idx) => (
+                  <Pressable
+                    key={session.id}
+                    onPress={() => setExpandedSession(expandedSession === session.id ? null : session.id)}
+                    className={`py-4 ${idx > 0 ? 'border-t border-ink-hairline' : ''}`}
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-base font-semibold text-ink-text">{formatRelativeDate(session.date)}</Text>
+                      {session.set_count != null && session.set_count > 0 && (
+                        <Text className="text-xs text-ink-faint" style={NUM_STYLE}>
+                          {session.set_count}
+                          {' '}
+                          {session.set_count === 1 ? 'set' : 'sets'}
+                        </Text>
+                      )}
+                    </View>
+                    {session.exercise_names && (
+                      <Text className="mt-1 text-sm text-ink-muted" numberOfLines={2}>
+                        {session.exercise_names}
                       </Text>
                     )}
-                  </View>
-                  {session.exercise_names && (
-                    <Text className="mt-1 text-sm text-charcoal-300" numberOfLines={2}>
-                      {session.exercise_names}
-                    </Text>
-                  )}
-                  {expandedSession === session.id && sessionSets.map(set => (
-                    <Text key={set.id} className="mt-1 text-sm text-charcoal-200">
-                      {set.exercise_name}
-                      :
-                      {formatWeight(set.weight, units).split(' ')[0]}
-                      ×
-                      {set.reps}
-                      {set.rest_time_sec ? ` · ${set.rest_time_sec}s rest` : ''}
-                    </Text>
-                  ))}
-                </Pressable>
-              ))
+                    {expandedSession === session.id && sessionSets.length > 0 && (
+                      <View className="mt-3 rounded-xl border border-ink-hairline bg-ink-card p-3">
+                        {sessionSets.map(set => (
+                          <View key={set.id} className="flex-row items-center justify-between py-1">
+                            <Text className="text-sm text-ink-text">{set.exercise_name}</Text>
+                            <Text className="text-sm text-ink-muted" style={NUM_STYLE}>
+                              {formatWeight(set.weight, units).split(' ')[0]}
+                              {' × '}
+                              {set.reps}
+                              {set.rest_time_sec ? `  · ${set.rest_time_sec}s` : ''}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
             )}
 
-        {/* Load more — show whenever we've filled the current page, since we don't
-            know the true total without an extra query. Worst case the next click
-            returns the same list, which is harmless. */}
         {recentSessions.length > 0 && recentSessions.length >= sessionsLimit && (
           <Pressable
             onPress={loadMoreSessions}
-            className="mt-2 items-center rounded-xl bg-charcoal-900 py-3"
+            className="mt-6 items-center py-3"
           >
-            <Text className="text-sm text-success-500">Load older sessions</Text>
+            <Text className="text-sm font-semibold text-success-500">Load older sessions</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -441,9 +465,10 @@ export function WorkoutsScreen() {
       {/* FAB */}
       <Pressable
         onPress={startWorkout}
-        className="absolute right-4 bottom-6 size-14 items-center justify-center rounded-full bg-success-500 shadow-lg"
+        className="absolute right-5 size-16 items-center justify-center rounded-full bg-success-500 shadow-lg"
+        style={{ bottom: insets.bottom + 16 }}
       >
-        <Text className="text-2xl font-bold text-black">+</Text>
+        <Text className="text-3xl font-bold text-black">+</Text>
       </Pressable>
     </View>
   );

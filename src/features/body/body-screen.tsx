@@ -1,6 +1,8 @@
+import type { TextStyle } from 'react-native';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useUserStore } from '@/features/profile/use-user-store';
@@ -10,7 +12,10 @@ import { formatLength, formatWeight, parseLengthInput, parseWeightInput } from '
 import { SimpleChart } from './components/simple-chart';
 import { useBodyStore } from './use-body-store';
 
+const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
+
 export function BodyScreen() {
+  const insets = useSafeAreaInsets();
   const user = useUserStore.use.user();
   const units = user?.preferred_units ?? 'metric';
   const weightTrend = useBodyStore.use.weightTrend();
@@ -94,26 +99,30 @@ export function BodyScreen() {
 
   return (
     <ScrollView
-      className="flex-1 bg-charcoal-950"
-      contentContainerClassName="p-4 pb-10 pt-14"
+      className="flex-1 bg-ink-base"
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40 }}
+      contentContainerClassName="px-5"
       refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
     >
-      <Text className="mb-4 text-2xl font-bold text-white">Body Metrics</Text>
+      <Text className="mb-1 text-3xl font-bold text-ink-text">Body</Text>
+      <Text className="mb-8 text-sm text-ink-faint">Weight, waist, and body fat over time</Text>
 
       {/* Weight Trend Chart */}
       {chartData.length >= 2
         ? (
-            <View className="mb-6">
-              <Text className="mb-2 text-sm font-semibold text-white">Weight Trend</Text>
+            <View className="mb-10">
+              <View className="mb-3 flex-row items-baseline justify-between">
+                <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Weight trend</Text>
+              </View>
               <SimpleChart data={chartData} height={150} color="#22C55E" />
-              <View className="mt-3 flex-row gap-2">
+              <View className="mt-4 flex-row gap-2">
                 {TREND_OPTIONS.map(d => (
                   <Pressable
                     key={d}
                     onPress={() => setTrendDays(d)}
-                    className={`flex-1 items-center rounded-lg py-2 ${trendDays === d ? 'bg-success-500' : 'bg-charcoal-800'}`}
+                    className={`flex-1 items-center rounded-full border py-2 ${trendDays === d ? 'border-success-500 bg-success-500' : 'border-ink-hairline bg-transparent'}`}
                   >
-                    <Text className={trendDays === d ? 'text-sm font-bold text-black' : 'text-sm text-charcoal-300'}>
+                    <Text className={trendDays === d ? 'text-sm font-bold text-black' : 'text-sm text-ink-muted'} style={NUM_STYLE}>
                       {d}
                       d
                     </Text>
@@ -123,78 +132,80 @@ export function BodyScreen() {
             </View>
           )
         : (
-            <View className="mb-6 items-center rounded-xl bg-charcoal-900 p-6">
-              <Text className="text-center text-charcoal-400">
-                Log at least 2 weigh-ins to see your trend chart
+            <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-card p-6">
+              <Text className="text-center text-sm text-ink-muted">
+                Log at least 2 weigh-ins to see your trend.
               </Text>
             </View>
           )}
 
       {/* Waist Trend */}
       {waistChartData.length >= 2 && (
-        <View className="mb-6">
-          <Text className="mb-2 text-sm font-semibold text-white">Waist Trend</Text>
+        <View className="mb-10">
+          <Text className="mb-3 text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Waist trend</Text>
           <SimpleChart data={waistChartData} height={120} color="#FBBF24" />
         </View>
       )}
 
       {/* Log Entry Form */}
-      <View className="mb-6 rounded-xl bg-charcoal-900 p-4">
-        <Text className="mb-4 text-base font-semibold text-white">Log Today</Text>
+      <View className="mb-10 rounded-2xl border border-ink-hairline bg-ink-card p-5">
+        <Text className="mb-4 text-lg font-semibold text-ink-text">Log today</Text>
         <TextInput
           placeholder={`Weight (${units === 'metric' ? 'kg' : 'lbs'})`}
           keyboardType="numeric"
           value={weightInput}
           onChangeText={setWeightInput}
-          className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-          placeholderTextColor="#7D7D7D"
+          className="mb-3 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+          style={NUM_STYLE}
+          placeholderTextColor="#71717A"
         />
         <TextInput
           placeholder={`Waist (${units === 'metric' ? 'cm' : 'in'})`}
           keyboardType="numeric"
           value={waistInput}
           onChangeText={setWaistInput}
-          className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-          placeholderTextColor="#7D7D7D"
+          className="mb-3 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+          style={NUM_STYLE}
+          placeholderTextColor="#71717A"
         />
         <TextInput
           placeholder="Body fat % (optional)"
           keyboardType="numeric"
           value={bodyFatInput}
           onChangeText={setBodyFatInput}
-          className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-          placeholderTextColor="#7D7D7D"
+          className="mb-3 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+          style={NUM_STYLE}
+          placeholderTextColor="#71717A"
         />
         <TextInput
           placeholder="Notes (optional)"
           value={notesInput}
           onChangeText={setNotesInput}
-          className="mb-3 rounded-xl border border-charcoal-700 bg-charcoal-950 px-4 py-3 text-white"
-          placeholderTextColor="#7D7D7D"
+          className="mb-4 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+          placeholderTextColor="#71717A"
         />
         {saveError && (
-          <Text className="mb-2 text-sm text-danger-500">{saveError}</Text>
+          <Text className="mb-3 text-sm text-danger-400">{saveError}</Text>
         )}
         <Button
-          label={saving ? 'Saving...' : 'Save Entry'}
+          label={saving ? 'Saving…' : 'Save entry'}
+          variant="primary"
           onPress={handleSave}
           disabled={!hasInput || saving}
-          className="bg-success-500"
-          textClassName="text-black font-bold"
         />
       </View>
 
       {/* History */}
       {recentMetrics.length > 0 && (
-        <View className="mb-6">
-          <Text className="mb-2 text-sm font-semibold text-white">Recent</Text>
-          {recentMetrics.map(metric => (
-            <View key={metric.id} className="flex-row justify-between border-b border-charcoal-800 py-3">
-              <Text className="flex-1 text-sm text-charcoal-400">{formatRelativeDate(metric.date)}</Text>
-              {metric.weight != null && <Text className="text-sm text-white">{formatWeight(metric.weight, units)}</Text>}
-              {metric.waist != null && <Text className="ml-4 text-sm text-charcoal-400">{formatLength(metric.waist, units)}</Text>}
+        <View>
+          <Text className="mb-3 text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Recent</Text>
+          {recentMetrics.map((metric, idx) => (
+            <View key={metric.id} className={`flex-row items-center justify-between py-3 ${idx > 0 ? 'border-t border-ink-hairline' : ''}`}>
+              <Text className="flex-1 text-sm text-ink-faint">{formatRelativeDate(metric.date)}</Text>
+              {metric.weight != null && <Text className="text-base text-ink-text" style={NUM_STYLE}>{formatWeight(metric.weight, units)}</Text>}
+              {metric.waist != null && <Text className="ml-4 text-sm text-ink-muted" style={NUM_STYLE}>{formatLength(metric.waist, units)}</Text>}
               {metric.body_fat != null && (
-                <Text className="ml-4 text-sm text-charcoal-400">
+                <Text className="ml-4 text-sm text-ink-muted" style={NUM_STYLE}>
                   {metric.body_fat}
                   %
                 </Text>

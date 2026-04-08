@@ -85,6 +85,31 @@
   --color-danger-800: #991B1B;
   --color-danger-900: #7F1D1D;
 
+  /* ============================================================
+   * Refreshed design system — "Quiet Instrument"
+   * Surfaces, ink, hairlines. Reserve accent for verbs.
+   * Use these tokens in new code; legacy charcoal-* kept as alias.
+   * ============================================================ */
+
+  /* Surfaces (3-level elevation) */
+  --color-ink-base: #0B0B0C;       /* page background */
+  --color-ink-card: #15161A;       /* default card */
+  --color-ink-elevated: #1C1D22;   /* hero card (Coach) */
+  --color-ink-hairline: #26272D;   /* dividers, card borders */
+
+  /* Text */
+  --color-ink-text: #F4F4F5;       /* primary */
+  --color-ink-muted: #A1A1AA;      /* secondary */
+  --color-ink-faint: #71717A;      /* tertiary, captions */
+
+  /* Accent (kept at #22C55E — Tailwind green-500, already in code) */
+  --color-ink-accent: #22C55E;
+  --color-ink-accent-ink: #0B0B0C; /* foreground when sitting on accent */
+
+  /* Semantic */
+  --color-ink-danger: #F87171;
+  --color-ink-warning: #FBBF24;
+
   /* Semantic colors - dark mode first (gym is dark-only MVP) */
   --color-background: #121212;
   --color-foreground: #fafafa;
