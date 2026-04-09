@@ -53,12 +53,26 @@ export async function seedFoodsFromJson(
   await db.withTransactionAsync(async () => {
     for (const r of rows) {
       await db.runAsync(
-        `INSERT OR IGNORE INTO food (
+        `INSERT INTO food (
            id, name, name_lower, cuisine, category,
            default_serving_qty, default_serving_unit, default_serving_grams,
            kcal, protein_g, carbs_g, fat_g, fiber_g,
            source, is_favorite
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'builtin-unverified', 0)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'builtin-unverified', 0)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           name_lower = excluded.name_lower,
+           cuisine = excluded.cuisine,
+           category = excluded.category,
+           default_serving_qty = excluded.default_serving_qty,
+           default_serving_unit = excluded.default_serving_unit,
+           default_serving_grams = excluded.default_serving_grams,
+           kcal = excluded.kcal,
+           protein_g = excluded.protein_g,
+           carbs_g = excluded.carbs_g,
+           fat_g = excluded.fat_g,
+           fiber_g = excluded.fiber_g,
+           updated_at = datetime('now')`,
         [
           r.id,
           r.name,

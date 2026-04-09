@@ -30,7 +30,14 @@ export function FoodPicker({ ref, onPick }: FoodPickerProps & { ref?: React.RefO
   const reset = useCallback(() => setMode({ kind: 'browse' }), []);
 
   return (
-    <Modal ref={ref} snapPoints={['85%']} title="Add meal" onDismiss={reset}>
+    <Modal
+      ref={ref}
+      snapPoints={['85%']}
+      title="Add meal"
+      onDismiss={reset}
+      backgroundStyle={{ backgroundColor: '#0B0B0C' }}
+      handleIndicatorStyle={{ backgroundColor: '#26272D' }}
+    >
       {mode.kind === 'browse' && (
         <BrowseView
           onSelect={f => setMode({ kind: 'serve', food: f })}
