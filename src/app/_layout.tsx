@@ -17,7 +17,7 @@ import { useUserStore } from '@/features/profile/use-user-store';
 import { configureLLM } from '@/lib/ai/llm-client';
 import { APIProvider } from '@/lib/api';
 import { db, expoDb } from '@/lib/db';
-import { seedExercises } from '@/lib/db/seed';
+import { seedExercises, seedFoods } from '@/lib/db/seed';
 import { loadSelectedTheme } from '@/lib/hooks/use-selected-theme';
 import { loadSelectedLanguage } from '@/lib/i18n';
 import { hydrateStorage } from '@/lib/storage';
@@ -92,6 +92,7 @@ export default function RootLayout() {
     (async () => {
       try {
         await seedExercises(expoDb);
+        await seedFoods(expoDb);
         await loadUser();
       }
       catch (err) {

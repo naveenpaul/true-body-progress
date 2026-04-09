@@ -74,8 +74,49 @@ export type NutritionEntry = {
   protein: number; // grams
   carbs: number; // grams
   fats: number; // grams
+  food_id: string | null;
+  servings: number | null;
   created_at: string;
   updated_at: string;
+};
+
+export type Cuisine = 'indian' | 'us' | 'chinese' | 'korean' | 'generic' | 'custom';
+export type FoodSource = 'builtin-unverified' | 'builtin-verified' | 'custom';
+
+export type Food = {
+  id: string;
+  name: string;
+  name_lower: string;
+  cuisine: Cuisine;
+  category: string;
+  default_serving_qty: number;
+  default_serving_unit: string; // "katori", "roti", "cup", "piece", "g"
+  default_serving_grams: number | null;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number | null;
+  source: FoodSource;
+  is_favorite: number; // 0 | 1
+  created_at: string;
+  updated_at: string;
+};
+
+// Shape used by seed JSON files. Omits server-managed columns.
+export type FoodSeed = {
+  id: string;
+  name: string;
+  cuisine: Cuisine;
+  category: string;
+  default_serving_qty: number;
+  default_serving_unit: string;
+  default_serving_grams: number | null;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number | null;
 };
 
 export type Suggestion = {
