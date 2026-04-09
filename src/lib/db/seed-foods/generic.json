@@ -1,0 +1,58 @@
+[
+  {
+    "id": "gn-egg-whole-large",
+    "name": "Egg (whole, large)",
+    "cuisine": "generic",
+    "category": "protein",
+    "default_serving_qty": 1,
+    "default_serving_unit": "piece",
+    "default_serving_grams": 50,
+    "kcal": 72,
+    "protein_g": 6.3,
+    "carbs_g": 0.4,
+    "fat_g": 4.8,
+    "fiber_g": 0
+  },
+  {
+    "id": "gn-milk-whole",
+    "name": "Whole Milk",
+    "cuisine": "generic",
+    "category": "dairy",
+    "default_serving_qty": 1,
+    "default_serving_unit": "cup",
+    "default_serving_grams": 244,
+    "kcal": 150,
+    "protein_g": 8,
+    "carbs_g": 12,
+    "fat_g": 8,
+    "fiber_g": 0
+  },
+  {
+    "id": "gn-olive-oil",
+    "name": "Olive Oil",
+    "cuisine": "generic",
+    "category": "fats",
+    "default_serving_qty": 1,
+    "default_serving_unit": "tbsp",
+    "default_serving_grams": 14,
+    "kcal": 120,
+    "protein_g": 0,
+    "carbs_g": 0,
+    "fat_g": 14,
+    "fiber_g": 0
+  },
+  {
+    "id": "gn-almonds",
+    "name": "Almonds",
+    "cuisine": "generic",
+    "category": "snacks",
+    "default_serving_qty": 28,
+    "default_serving_unit": "g",
+    "default_serving_grams": 28,
+    "kcal": 164,
+    "protein_g": 6,
+    "carbs_g": 6,
+    "fat_g": 14,
+    "fiber_g": 3.5
+  }
+]

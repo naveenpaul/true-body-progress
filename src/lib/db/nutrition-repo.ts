@@ -10,13 +10,51 @@ export async function logMeal(
   protein: number,
   carbs: number,
   fats: number,
+  options: { foodId?: string | null; servings?: number | null } = {},
 ): Promise<number> {
   const result = await db.runAsync(
-    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [date, mealName, calories, protein, carbs, fats],
+    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, food_id, servings)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      date,
+      mealName,
+      calories,
+      protein,
+      carbs,
+      fats,
+      options.foodId ?? null,
+      options.servings ?? null,
+    ],
   );
   return result.lastInsertRowId;
+}
+
+// Convenience: log a meal from a Food row + servings multiplier. Computes
+// macros from the food's per-default-serving values × servings, so the saved
+// nutrition_entry stays accurate even if the food row changes later.
+export async function logMealFromFood(
+  db: SQLiteDatabase,
+  date: string,
+  food: {
+    id: string;
+    name: string;
+    kcal: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+  },
+  servings: number,
+): Promise<number> {
+  return logMeal(
+    db,
+    date,
+    food.name,
+    food.kcal * servings,
+    food.protein_g * servings,
+    food.carbs_g * servings,
+    food.fat_g * servings,
+    { foodId: food.id, servings },
+  );
 }
 
 export async function getDailyTotals(

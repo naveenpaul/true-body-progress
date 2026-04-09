@@ -1,5 +1,18 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import type { FoodSeed } from '@/lib/types';
+
+import {
+  initFoodsFts,
+  rebuildFoodsFtsIfEmpty,
+  seedFoodsFromJson,
+} from './foods-repo';
+import chineseFoods from './seed-foods/chinese.json';
+import genericFoods from './seed-foods/generic.json';
+import indianFoods from './seed-foods/indian.json';
+import koreanFoods from './seed-foods/korean.json';
+import usFoods from './seed-foods/us.json';
+
 const DEFAULT_EXERCISES = [
   // Chest
   { name: 'Bench Press', primary: 'chest', secondary: 'triceps', equipment: 'barbell' },
@@ -56,6 +69,43 @@ const DEFAULT_EXERCISES = [
   { name: 'Cable Crunch', primary: 'core', secondary: null, equipment: 'cable' },
   { name: 'Ab Wheel Rollout', primary: 'core', secondary: null, equipment: 'bodyweight' },
 ];
+
+// Bumped whenever bundled foods change in a way that should re-seed.
+// We INSERT OR IGNORE on stable string ids so re-running is safe — bumping
+// this just lets us add new builtin rows without nuking custom foods.
+const FOODS_SEED_VERSION = 3;
+
+export async function seedFoods(db: SQLiteDatabase): Promise<void> {
+  await initFoodsFts(db);
+  await db.execAsync(
+    `CREATE TABLE IF NOT EXISTS kv_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  );
+
+  const versionRow = await db.getFirstAsync<{ value: string }>(
+    `SELECT value FROM kv_meta WHERE key = 'foods_seed_version'`,
+  );
+  const currentVersion = versionRow ? Number(versionRow.value) : 0;
+  if (currentVersion >= FOODS_SEED_VERSION) {
+    await rebuildFoodsFtsIfEmpty(db);
+    return;
+  }
+
+  const allRows: FoodSeed[] = [
+    ...(indianFoods as FoodSeed[]),
+    ...(usFoods as FoodSeed[]),
+    ...(chineseFoods as FoodSeed[]),
+    ...(koreanFoods as FoodSeed[]),
+    ...(genericFoods as FoodSeed[]),
+  ];
+  await seedFoodsFromJson(db, allRows);
+  await rebuildFoodsFtsIfEmpty(db);
+
+  await db.runAsync(
+    `INSERT INTO kv_meta (key, value) VALUES ('foods_seed_version', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [String(FOODS_SEED_VERSION)],
+  );
+}
 
 export async function seedExercises(db: SQLiteDatabase): Promise<void> {
   const count = await db.getFirstAsync<{ count: number }>(

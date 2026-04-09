@@ -99,10 +99,50 @@ export const nutritionEntry = sqliteTable(
     protein: real('protein').notNull(),
     carbs: real('carbs').notNull(),
     fats: real('fats').notNull(),
+    // Optional link to a food row when added via picker. Null for legacy /
+    // freeform entries. servings is the multiplier on food.default_serving_qty.
+    foodId: text('food_id').references(() => food.id, { onDelete: 'set null' }),
+    servings: real('servings'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
   table => ({
     dateIdx: index('idx_nutrition_entry_date').on(table.date),
+    foodIdx: index('idx_nutrition_entry_food').on(table.foodId),
+  }),
+);
+
+// Curated + custom food database. Seeded from JSON on first launch (see
+// seed-foods/*.json). String IDs are stable across seed updates so user
+// nutrition_entries keep their references when we ship new builtin data.
+export const food = sqliteTable(
+  'food',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    nameLower: text('name_lower').notNull(),
+    cuisine: text('cuisine', {
+      enum: ['indian', 'us', 'chinese', 'korean', 'generic', 'custom'],
+    }).notNull(),
+    category: text('category').notNull(),
+    defaultServingQty: real('default_serving_qty').notNull(),
+    defaultServingUnit: text('default_serving_unit').notNull(),
+    defaultServingGrams: real('default_serving_grams'),
+    kcal: real('kcal').notNull(),
+    proteinG: real('protein_g').notNull(),
+    carbsG: real('carbs_g').notNull(),
+    fatG: real('fat_g').notNull(),
+    fiberG: real('fiber_g'),
+    source: text('source', {
+      enum: ['builtin-unverified', 'builtin-verified', 'custom'],
+    }).notNull(),
+    isFavorite: integer('is_favorite').notNull().default(0),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+  },
+  table => ({
+    nameLowerIdx: index('idx_food_name_lower').on(table.nameLower),
+    cuisineIdx: index('idx_food_cuisine').on(table.cuisine),
+    favoriteIdx: index('idx_food_favorite').on(table.isFavorite),
   }),
 );

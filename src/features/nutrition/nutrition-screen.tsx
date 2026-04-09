@@ -1,18 +1,19 @@
 import type { TextStyle } from 'react-native';
 
-import type { NutritionEntry } from '@/lib/types';
+import type { Food, NutritionEntry } from '@/lib/types';
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Text } from '@/components/ui';
+import { Text } from '@/components/ui';
 import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
 import { today } from '@/lib/dates';
 import { expoDb } from '@/lib/db';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { calculateMacroTargets, calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
+import { FoodPicker } from './food-picker';
 
 const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
 
@@ -23,18 +24,11 @@ export function NutritionScreen() {
 
   const [meals, setMeals] = useState<NutritionEntry[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
-  const [showForm, setShowForm] = useState(false);
-  const [mealName, setMealName] = useState('');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fats, setFats] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const parseNum = (s: string): number => Number.parseFloat(s.replace(',', '.'));
+  const [refreshKey, setRefreshKey] = useState(0);
+  const pickerRef = useRef<React.ElementRef<typeof FoodPicker>>(null);
 
   const currentDate = today();
+  const refresh = () => setRefreshKey(k => k + 1);
 
   const currentWeight = latest?.weight ?? user?.target_weight ?? 70;
   const tdee = user
@@ -45,80 +39,31 @@ export function NutritionScreen() {
     ? calculateMacroTargets(targetCals, currentWeight, user.goal_type)
     : { protein: 140, carbs: 200, fats: 60 };
 
-  const loadData = useCallback(async () => {
-    const [dayMeals, dayTotals] = await Promise.all([
-      nutritionRepo.getMealsForDate(expoDb, currentDate),
-      nutritionRepo.getDailyTotals(expoDb, currentDate),
-    ]);
-    setMeals(dayMeals);
-    setTotals(dayTotals);
-  }, [currentDate]);
-
   useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const handleSave = async () => {
-    if (!mealName.trim()) {
-      setSaveError('Meal name is required');
-      return;
-    }
-    const cal = parseNum(calories);
-    if (Number.isNaN(cal) || cal < 0) {
-      setSaveError('Calories must be a non-negative number');
-      return;
-    }
-    // Macros are optional but if provided, must be valid non-negative numbers.
-    const macroFields: Array<[string, string]> = [
-      ['Protein', protein],
-      ['Carbs', carbs],
-      ['Fats', fats],
-    ];
-    const parsedMacros: Record<string, number> = {};
-    for (const [name, raw] of macroFields) {
-      if (!raw) {
-        parsedMacros[name] = 0;
-        continue;
-      }
-      const v = parseNum(raw);
-      if (Number.isNaN(v) || v < 0) {
-        setSaveError(`${name} must be a non-negative number`);
+    let cancelled = false;
+    (async () => {
+      const [dayMeals, dayTotals] = await Promise.all([
+        nutritionRepo.getMealsForDate(expoDb, currentDate),
+        nutritionRepo.getDailyTotals(expoDb, currentDate),
+      ]);
+      if (cancelled)
         return;
-      }
-      parsedMacros[name] = v;
-    }
+      setMeals(dayMeals);
+      setTotals(dayTotals);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDate, refreshKey]);
 
-    setSaveError(null);
-    setSaving(true);
-    try {
-      await nutritionRepo.logMeal(
-        expoDb,
-        currentDate,
-        mealName.trim(),
-        cal,
-        parsedMacros.Protein,
-        parsedMacros.Carbs,
-        parsedMacros.Fats,
-      );
-      setMealName('');
-      setCalories('');
-      setProtein('');
-      setCarbs('');
-      setFats('');
-      setShowForm(false);
-      await loadData();
-    }
-    catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Failed to save meal');
-    }
-    finally {
-      setSaving(false);
-    }
+  const handlePick = async (food: Food, servings: number) => {
+    await nutritionRepo.logMealFromFood(expoDb, currentDate, food, servings);
+    refresh();
   };
 
   const handleDelete = async (id: number) => {
     await nutritionRepo.deleteMeal(expoDb, id);
-    await loadData();
+    refresh();
   };
 
   return (
@@ -126,7 +71,7 @@ export function NutritionScreen() {
       className="flex-1 bg-ink-base"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40 }}
       contentContainerClassName="px-5"
-      refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
+      refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor="#22C55E" />}
     >
       <Text className="mb-1 text-3xl font-bold text-ink-text">Nutrition</Text>
       <Text className="mb-8 text-sm text-ink-faint">Today</Text>
@@ -143,73 +88,12 @@ export function NutritionScreen() {
       <View>
         <View className="mb-3 flex-row items-baseline justify-between">
           <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Today's meals</Text>
-          <Pressable onPress={() => setShowForm(!showForm)}>
-            <Text className="text-sm font-semibold text-success-500">{showForm ? 'Cancel' : '+ Add meal'}</Text>
+          <Pressable onPress={() => pickerRef.current?.present()}>
+            <Text className="text-sm font-semibold text-success-500">+ Add meal</Text>
           </Pressable>
         </View>
 
-        {showForm && (
-          <View className="mb-5 rounded-2xl border border-ink-hairline bg-ink-card p-5">
-            <TextInput
-              placeholder="Meal name (e.g. Chicken breast 200g)"
-              value={mealName}
-              onChangeText={setMealName}
-              className="mb-3 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-              placeholderTextColor="#71717A"
-            />
-            <View className="mb-3 flex-row gap-3">
-              <TextInput
-                placeholder="Cal"
-                keyboardType="numeric"
-                value={calories}
-                onChangeText={setCalories}
-                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-                style={NUM_STYLE}
-                placeholderTextColor="#71717A"
-              />
-              <TextInput
-                placeholder="Protein"
-                keyboardType="numeric"
-                value={protein}
-                onChangeText={setProtein}
-                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-                style={NUM_STYLE}
-                placeholderTextColor="#71717A"
-              />
-            </View>
-            <View className="mb-4 flex-row gap-3">
-              <TextInput
-                placeholder="Carbs"
-                keyboardType="numeric"
-                value={carbs}
-                onChangeText={setCarbs}
-                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-                style={NUM_STYLE}
-                placeholderTextColor="#71717A"
-              />
-              <TextInput
-                placeholder="Fats"
-                keyboardType="numeric"
-                value={fats}
-                onChangeText={setFats}
-                className="flex-1 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-                style={NUM_STYLE}
-                placeholderTextColor="#71717A"
-              />
-            </View>
-            {saveError && (
-              <Text className="mb-3 text-sm text-danger-400">{saveError}</Text>
-            )}
-            <Button
-              label={saving ? 'Saving…' : 'Save meal'}
-              variant="primary"
-              onPress={handleSave}
-              disabled={!mealName || !calories || saving}
-            />
-          </View>
-        )}
-
-        {meals.length === 0 && !showForm
+        {meals.length === 0
           ? (
               <View className="rounded-2xl border border-ink-hairline bg-ink-card p-6">
                 <Text className="text-center text-sm text-ink-muted">
@@ -223,15 +107,15 @@ export function NutritionScreen() {
                   <View className="flex-1">
                     <Text className="text-base text-ink-text">{meal.meal_name}</Text>
                     <Text className="mt-0.5 text-xs text-ink-faint" style={NUM_STYLE}>
-                      {meal.calories}
+                      {Math.round(meal.calories)}
                       {' kcal · '}
-                      {meal.protein}
+                      {Math.round(meal.protein)}
                       P ·
                       {' '}
-                      {meal.carbs}
+                      {Math.round(meal.carbs)}
                       C ·
                       {' '}
-                      {meal.fats}
+                      {Math.round(meal.fats)}
                       F
                     </Text>
                   </View>
@@ -242,6 +126,8 @@ export function NutritionScreen() {
               ))
             )}
       </View>
+
+      <FoodPicker ref={pickerRef} onPick={handlePick} />
     </ScrollView>
   );
 }
