@@ -44,3 +44,43 @@ export function formatDuration(seconds: number): string {
     return `${hrs}:${pad(mins)}:${pad(secs)}`;
   return `${pad(mins)}:${pad(secs)}`;
 }
+
+export type DateRange = { from: string; to: string };
+
+export type HistoryRangeKey = 'all' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'last_3_months';
+
+// Inclusive YYYY-MM-DD bounds for a history filter preset. Weeks start on Monday.
+// Returns null for 'all' (no date filter).
+export function getHistoryRange(key: HistoryRangeKey, now: Date = new Date()): DateRange | null {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const mondayOffset = (now.getDay() + 6) % 7;
+  switch (key) {
+    case 'all':
+      return null;
+    case 'this_week':
+      return { from: formatLocalYMD(new Date(y, m, d - mondayOffset)), to: formatLocalYMD(now) };
+    case 'last_week':
+      return {
+        from: formatLocalYMD(new Date(y, m, d - mondayOffset - 7)),
+        to: formatLocalYMD(new Date(y, m, d - mondayOffset - 1)),
+      };
+    case 'this_month':
+      return { from: formatLocalYMD(new Date(y, m, 1)), to: formatLocalYMD(now) };
+    case 'last_month':
+      return { from: formatLocalYMD(new Date(y, m - 1, 1)), to: formatLocalYMD(new Date(y, m, 0)) };
+    case 'last_3_months':
+      return { from: formatLocalYMD(new Date(y, m - 2, 1)), to: formatLocalYMD(now) };
+  }
+}
+
+// "Mon, 6 Oct 2026" style label for history rows outside the relative window.
+export function formatShortDate(dateStr: string): string {
+  return parseLocalYMD(dateStr).toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}

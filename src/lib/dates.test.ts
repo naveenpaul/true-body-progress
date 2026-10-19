@@ -1,4 +1,4 @@
-import { formatDuration, formatRelativeDate, today } from './dates';
+import { formatDuration, formatRelativeDate, getHistoryRange, today } from './dates';
 
 describe('dates', () => {
   // Regression: today() previously used toISOString() which is UTC. Users in
@@ -69,5 +69,37 @@ describe('dates', () => {
     it('clamps negative input to 0', () => {
       expect(formatDuration(-5)).toBe('00:00');
     });
+  });
+});
+
+describe('getHistoryRange', () => {
+  // Wed 15 Oct 2026
+  const now = new Date(2026, 9, 15);
+
+  it('returns null for all', () => {
+    expect(getHistoryRange('all', now)).toBeNull();
+  });
+
+  it('this week starts on Monday', () => {
+    expect(getHistoryRange('this_week', now)).toEqual({ from: '2026-10-12', to: '2026-10-15' });
+  });
+
+  it('last week is the previous Mon–Sun', () => {
+    expect(getHistoryRange('last_week', now)).toEqual({ from: '2026-10-05', to: '2026-10-11' });
+  });
+
+  it('treats Sunday as the end of the week', () => {
+    const sunday = new Date(2026, 9, 18);
+    expect(getHistoryRange('this_week', sunday)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
+  });
+
+  it('month ranges cover full calendar months', () => {
+    expect(getHistoryRange('this_month', now)).toEqual({ from: '2026-10-01', to: '2026-10-15' });
+    expect(getHistoryRange('last_month', now)).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(getHistoryRange('last_3_months', now)).toEqual({ from: '2026-08-01', to: '2026-10-15' });
+  });
+
+  it('last month wraps across the year boundary', () => {
+    expect(getHistoryRange('last_month', new Date(2026, 0, 10))).toEqual({ from: '2025-12-01', to: '2025-12-31' });
   });
 });

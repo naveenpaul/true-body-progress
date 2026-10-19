@@ -36,7 +36,33 @@ export async function saveWorkout(
   return sessionId;
 }
 
-export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10): Promise<Array<WorkoutSession & { set_count: number; total_volume: number; total_reps: number; exercise_names: string | null }>> {
+export type SessionFilter = {
+  from?: string; // inclusive YYYY-MM-DD
+  to?: string; // inclusive YYYY-MM-DD
+  exerciseId?: number; // only sessions containing this exercise
+};
+
+export async function getRecentSessions(
+  db: SQLiteDatabase,
+  limit: number = 10,
+  filter: SessionFilter = {},
+): Promise<Array<WorkoutSession & { set_count: number; total_volume: number; total_reps: number; exercise_names: string | null }>> {
+  const where: string[] = [];
+  const params: Array<string | number> = [];
+  if (filter.from) {
+    where.push('s.date >= ?');
+    params.push(filter.from);
+  }
+  if (filter.to) {
+    where.push('s.date <= ?');
+    params.push(filter.to);
+  }
+  if (filter.exerciseId != null) {
+    where.push('EXISTS (SELECT 1 FROM workout_set wx WHERE wx.session_id = s.id AND wx.exercise_id = ?)');
+    params.push(filter.exerciseId);
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
   return db.getAllAsync(
     `SELECT s.*,
             COUNT(ws.id) as set_count,
@@ -51,10 +77,11 @@ export async function getRecentSessions(db: SQLiteDatabase, limit: number = 10):
              )) as exercise_names
      FROM workout_session s
      LEFT JOIN workout_set ws ON ws.session_id = s.id
+     ${whereSql}
      GROUP BY s.id
      ORDER BY s.date DESC, s.id DESC
      LIMIT ?`,
-    [limit],
+    [...params, limit],
   );
 }
 
