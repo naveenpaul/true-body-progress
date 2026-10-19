@@ -2,33 +2,46 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { WorkoutSession, WorkoutSet, WorkoutSetWithExercise } from '@/lib/types';
 
+// Volume of a set: (added weight + body weight snapshot) × reps. Body weight is
+// only set for bodyweight exercises, so this is plain weight × reps otherwise.
+// Timed/cardio sets have reps = 0 and contribute nothing.
+function volumeSql(alias: string): string {
+  return `((${alias}.weight + COALESCE(${alias}.bodyweight_kg, 0)) * ${alias}.reps)`;
+}
+
+export type NewWorkoutSet = {
+  exercise_id: number;
+  set_number: number;
+  reps: number;
+  weight: number;
+  rpe: number | null;
+  rest_time_sec: number | null;
+  duration_sec: number | null;
+  distance_m: number | null;
+  bodyweight_kg: number | null;
+};
+
 export async function saveWorkout(
   db: SQLiteDatabase,
   date: string,
-  sets: Array<{
-    exercise_id: number;
-    set_number: number;
-    reps: number;
-    weight: number;
-    rpe: number | null;
-    rest_time_sec: number | null;
-  }>,
+  sets: NewWorkoutSet[],
   notes?: string,
+  routineId: number | null = null,
 ): Promise<number> {
   let sessionId = 0;
 
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
-      'INSERT INTO workout_session (date, notes) VALUES (?, ?)',
-      [date, notes ?? null],
+      'INSERT INTO workout_session (date, notes, routine_id) VALUES (?, ?, ?)',
+      [date, notes ?? null, routineId],
     );
     sessionId = result.lastInsertRowId;
 
     for (const set of sets) {
       await db.runAsync(
-        `INSERT INTO workout_set (session_id, exercise_id, set_number, reps, weight, rpe, rest_time_sec)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [sessionId, set.exercise_id, set.set_number, set.reps, set.weight, set.rpe, set.rest_time_sec],
+        `INSERT INTO workout_set (session_id, exercise_id, set_number, reps, weight, rpe, rest_time_sec, duration_sec, distance_m, bodyweight_kg)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [sessionId, set.exercise_id, set.set_number, set.reps, set.weight, set.rpe, set.rest_time_sec, set.duration_sec, set.distance_m, set.bodyweight_kg],
       );
     }
   });
@@ -40,6 +53,7 @@ export type SessionFilter = {
   from?: string; // inclusive YYYY-MM-DD
   to?: string; // inclusive YYYY-MM-DD
   exerciseId?: number; // only sessions containing this exercise
+  routineId?: number; // only sessions started from this routine
 };
 
 export async function getRecentSessions(
@@ -61,13 +75,18 @@ export async function getRecentSessions(
     where.push('EXISTS (SELECT 1 FROM workout_set wx WHERE wx.session_id = s.id AND wx.exercise_id = ?)');
     params.push(filter.exerciseId);
   }
+  if (filter.routineId != null) {
+    where.push('s.routine_id = ?');
+    params.push(filter.routineId);
+  }
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
   return db.getAllAsync(
     `SELECT s.*,
             COUNT(ws.id) as set_count,
-            COALESCE(SUM(ws.weight * ws.reps), 0) as total_volume,
+            COALESCE(SUM(${volumeSql('ws')}), 0) as total_volume,
             COALESCE(SUM(ws.reps), 0) as total_reps,
+            r.name as routine_name,
             (SELECT GROUP_CONCAT(name, ', ') FROM (
                SELECT DISTINCT e.name
                FROM workout_set ws2
@@ -77,6 +96,7 @@ export async function getRecentSessions(
              )) as exercise_names
      FROM workout_session s
      LEFT JOIN workout_set ws ON ws.session_id = s.id
+     LEFT JOIN routine r ON r.id = s.routine_id
      ${whereSql}
      GROUP BY s.id
      ORDER BY s.date DESC, s.id DESC
@@ -88,11 +108,15 @@ export async function getRecentSessions(
 export async function updateSet(
   db: SQLiteDatabase,
   setId: number,
-  updates: { reps: number; weight: number },
+  updates: { reps: number; weight: number; duration_sec?: number | null; distance_m?: number | null },
 ): Promise<void> {
   await db.runAsync(
-    `UPDATE workout_set SET reps = ?, weight = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [updates.reps, updates.weight, setId],
+    `UPDATE workout_set
+     SET reps = ?, weight = ?,
+         duration_sec = COALESCE(?, duration_sec), distance_m = COALESCE(?, distance_m),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [updates.reps, updates.weight, updates.duration_sec ?? null, updates.distance_m ?? null, setId],
   );
 }
 
@@ -105,11 +129,12 @@ export async function getSessionSets(db: SQLiteDatabase, sessionId: number): Pro
   return db.getAllAsync<WorkoutSetWithExercise>(
     `SELECT ws.*,
             COALESCE(e.name, '(deleted exercise)') as exercise_name,
-            e.equipment_type
+            e.equipment_type,
+            COALESCE(e.tracking_type, 'weight_reps') as tracking_type
      FROM workout_set ws
      LEFT JOIN exercise e ON ws.exercise_id = e.id
      WHERE ws.session_id = ?
-     ORDER BY ws.exercise_id, ws.set_number`,
+     ORDER BY ws.id`, // insertion order = the order exercises were done
     [sessionId],
   );
 }
@@ -167,7 +192,7 @@ export async function getStrengthTrend(
   return db.getAllAsync(
     `SELECT
        ws.date,
-       SUM(wset.weight * wset.reps) as total_volume,
+       SUM(${volumeSql('wset')}) as total_volume,
        (SELECT w2.weight FROM workout_set w2
           JOIN workout_session s2 ON w2.session_id = s2.id
           WHERE w2.exercise_id = wset.exercise_id AND s2.date = ws.date
@@ -200,12 +225,12 @@ export async function getVolumeByMuscleGroup(
   return db.getAllAsync<{ muscle_group: string; date: string; volume: number }>(
     `SELECT e.primary_muscle_group as muscle_group,
             s.date as date,
-            SUM(ws.weight * ws.reps) as volume
+            SUM(${volumeSql('ws')}) as volume
      FROM workout_set ws
      JOIN workout_session s ON ws.session_id = s.id
      JOIN exercise e ON ws.exercise_id = e.id
      WHERE s.date >= date('now', '-' || ? || ' days')
-       AND ws.weight * ws.reps > 0
+       AND ${volumeSql('ws')} > 0
      GROUP BY e.primary_muscle_group, s.date
      ORDER BY e.primary_muscle_group, s.date ASC`,
     [days],
@@ -231,7 +256,7 @@ export async function getWorkoutSummary(
   }>(
     `SELECT
        COUNT(DISTINCT s.id) as session_count,
-       COALESCE(SUM(ws.weight * ws.reps), 0) as total_volume,
+       COALESCE(SUM(${volumeSql('ws')}), 0) as total_volume,
        COUNT(ws.id) as total_sets,
        (SELECT GROUP_CONCAT(name, ', ') FROM (
           SELECT e.name, COUNT(ws2.id) as cnt
@@ -249,4 +274,14 @@ export async function getWorkoutSummary(
     [days, days],
   );
   return result ?? { session_count: 0, total_volume: 0, total_sets: 0, top_exercises: null };
+}
+
+// Routine of the most recent routine-based workout, for the rotation suggestion.
+export async function getLastRoutineId(db: SQLiteDatabase): Promise<number | null> {
+  const row = await db.getFirstAsync<{ routine_id: number }>(
+    `SELECT routine_id FROM workout_session
+     WHERE routine_id IS NOT NULL
+     ORDER BY date DESC, id DESC LIMIT 1`,
+  );
+  return row?.routine_id ?? null;
 }

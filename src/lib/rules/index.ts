@@ -39,7 +39,9 @@ export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[
 
   for (const exerciseId of exerciseIds) {
     const exercise = await exerciseRepo.getExerciseById(db, exerciseId);
-    if (!exercise)
+    // Weight progression advice only makes sense for loaded exercises —
+    // timed holds/cardio have reps = 0 and bodyweight moves have no bar weight.
+    if (!exercise || exercise.tracking_type !== 'weight_reps')
       continue;
 
     const recentSets = await workoutRepo.getRecentSetsForExercise(db, exerciseId, 3);
@@ -76,7 +78,7 @@ export async function getAllSuggestions(db: SQLiteDatabase): Promise<Suggestion[
   const performanceTrend = await Promise.all(
     recentSessions.slice(-5).map(async (session) => {
       const sets = await workoutRepo.getSessionSets(db, session.id);
-      const totalVolume = sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+      const totalVolume = sets.reduce((sum, s) => sum + (s.weight + (s.bodyweight_kg ?? 0)) * s.reps, 0);
       return { date: session.date, total_volume: totalVolume };
     }),
   );
