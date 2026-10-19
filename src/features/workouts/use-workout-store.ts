@@ -1,7 +1,8 @@
-import type { Exercise, WorkoutSession, WorkoutSetWithExercise } from '@/lib/types';
+import type { HistoryRangeKey } from '@/lib/dates';
 
+import type { Exercise, WorkoutSession, WorkoutSetWithExercise } from '@/lib/types';
 import { create } from 'zustand';
-import { today } from '@/lib/dates';
+import { getHistoryRange, today } from '@/lib/dates';
 import { expoDb } from '@/lib/db';
 import * as exerciseRepo from '@/lib/db/exercise-repo';
 import * as workoutRepo from '@/lib/db/workout-repo';
@@ -29,6 +30,12 @@ type WorkoutState = {
   volumeByMuscle: Array<{ muscle_group: string; date: string; volume: number }>;
 
   sessionsLimit: number;
+
+  // History filters
+  historyRange: HistoryRangeKey;
+  historyExerciseId: number | null;
+  setHistoryRange: (range: HistoryRangeKey) => Promise<void>;
+  setHistoryExercise: (exerciseId: number | null) => Promise<void>;
 
   // Rest timer
   restDuration: number; // seconds, user-configurable default
@@ -58,6 +65,15 @@ type WorkoutState = {
   deleteSession: (sessionId: number) => Promise<void>;
 };
 
+function historyFilter(state: Pick<WorkoutState, 'historyRange' | 'historyExerciseId'>): workoutRepo.SessionFilter {
+  const range = getHistoryRange(state.historyRange);
+  return {
+    from: range?.from,
+    to: range?.to,
+    exerciseId: state.historyExerciseId ?? undefined,
+  };
+}
+
 const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   isActive: false,
   startTime: null,
@@ -66,6 +82,8 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
   exercises: [],
   volumeByMuscle: [],
   sessionsLimit: 20,
+  historyRange: 'all',
+  historyExerciseId: null,
 
   restDuration: 90,
   restEndsAt: null,
@@ -126,8 +144,18 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   loadRecentSessions: async () => {
     const limit = get().sessionsLimit;
-    const recentSessions = await workoutRepo.getRecentSessions(expoDb, limit);
+    const recentSessions = await workoutRepo.getRecentSessions(expoDb, limit, historyFilter(get()));
     set({ recentSessions });
+  },
+
+  setHistoryRange: async (range) => {
+    set({ historyRange: range, sessionsLimit: 20 });
+    await get().loadRecentSessions();
+  },
+
+  setHistoryExercise: async (exerciseId) => {
+    set({ historyExerciseId: exerciseId, sessionsLimit: 20 });
+    await get().loadRecentSessions();
   },
 
   loadVolumeByMuscle: async (days = 60) => {
@@ -137,7 +165,7 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
   loadMoreSessions: async () => {
     const nextLimit = get().sessionsLimit + 20;
-    const recentSessions = await workoutRepo.getRecentSessions(expoDb, nextLimit);
+    const recentSessions = await workoutRepo.getRecentSessions(expoDb, nextLimit, historyFilter(get()));
     set({ sessionsLimit: nextLimit, recentSessions });
   },
 

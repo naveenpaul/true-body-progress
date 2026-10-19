@@ -1,5 +1,6 @@
 import type { TextStyle } from 'react-native';
 
+import type { HistoryRangeKey } from '@/lib/dates';
 import type { WorkoutSetWithExercise } from '@/lib/types';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
@@ -8,12 +9,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
 import { useUserStore } from '@/features/profile/use-user-store';
-import { formatRelativeDate } from '@/lib/dates';
+import { formatRelativeDate, formatShortDate } from '@/lib/dates';
 import { formatWeight, kgToLbs, lbsToKg } from '@/lib/units';
 
 import { useWorkoutStore } from './use-workout-store';
 
 const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
+
+const HISTORY_RANGES: Array<{ key: HistoryRangeKey; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'this_week', label: 'This week' },
+  { key: 'last_week', label: 'Last week' },
+  { key: 'this_month', label: 'This month' },
+  { key: 'last_month', label: 'Last month' },
+  { key: 'last_3_months', label: '3 months' },
+];
+
+// Today/Yesterday stay relative; anything older shows the real date so browsing
+// past weeks and months is unambiguous.
+function historyDateLabel(date: string): string {
+  const rel = formatRelativeDate(date);
+  return rel === 'Today' || rel === 'Yesterday' ? rel : formatShortDate(date);
+}
 
 function sessionSetsReducer(
   _: WorkoutSetWithExercise[],
@@ -42,6 +59,10 @@ export function WorkoutsScreen() {
   const loadExercises = useWorkoutStore.use.loadExercises();
   const loadRecentSessions = useWorkoutStore.use.loadRecentSessions();
   const loadMoreSessions = useWorkoutStore.use.loadMoreSessions();
+  const historyRange = useWorkoutStore.use.historyRange();
+  const historyExerciseId = useWorkoutStore.use.historyExerciseId();
+  const setHistoryRange = useWorkoutStore.use.setHistoryRange();
+  const setHistoryExercise = useWorkoutStore.use.setHistoryExercise();
   const startWorkout = useWorkoutStore.use.startWorkout();
   const cancelWorkout = useWorkoutStore.use.cancelWorkout();
   const saveWorkout = useWorkoutStore.use.saveWorkout();
@@ -60,6 +81,8 @@ export function WorkoutsScreen() {
   const setRestDuration = useWorkoutStore.use.setRestDuration();
 
   const [showPicker, setShowPicker] = useState(false);
+  // Picker is shared: 'add' adds to the active workout, 'filter' filters history.
+  const [pickerMode, setPickerMode] = useState<'add' | 'filter'>('add');
   const [searchQuery, setSearchQuery] = useState('');
   const [muscleFilter, setMuscleFilter] = useState<string | null>(null);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
@@ -216,6 +239,91 @@ export function WorkoutsScreen() {
 
   const muscleGroups = [...new Set(exercises.map(e => e.primary_muscle_group))].sort();
 
+  const openPicker = (mode: 'add' | 'filter') => {
+    setPickerMode(mode);
+    setShowPicker(true);
+  };
+  const closePicker = () => {
+    setShowPicker(false);
+    setSearchQuery('');
+    setMuscleFilter(null);
+  };
+  const historyExerciseName = exercises.find(e => e.id === historyExerciseId)?.name;
+  const isHistoryFiltered = historyRange !== 'all' || historyExerciseId != null;
+
+  // Exercise picker sheet, shared by the active workout (add) and history (filter).
+  const pickerModal = (
+    <Modal visible={showPicker} animationType="slide" transparent onRequestClose={closePicker}>
+      <View className="flex-1 justify-end bg-black/60">
+        <View
+          className="max-h-[80%] rounded-t-3xl border-t border-ink-hairline bg-ink-card p-6"
+          style={{ paddingBottom: insets.bottom + 16 }}
+        >
+          <View className="mb-4 h-1 w-10 self-center rounded-full bg-ink-hairline" />
+          <Text className="mb-4 text-xl font-bold text-ink-text">
+            {pickerMode === 'filter' ? 'Filter by exercise' : 'Add exercise'}
+          </Text>
+          <TextInput
+            placeholder="Search exercises…"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            className="mb-4 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
+            placeholderTextColor="#71717A"
+          />
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4 max-h-10">
+            {muscleGroups.map(mg => (
+              <Pressable
+                key={mg}
+                onPress={() => setMuscleFilter(muscleFilter === mg ? null : mg)}
+                className={`mr-2 rounded-full border px-3 py-1.5 ${muscleFilter === mg ? 'border-success-500 bg-success-500' : 'border-ink-hairline bg-transparent'}`}
+              >
+                <Text className={muscleFilter === mg ? 'text-sm font-semibold text-black' : 'text-sm text-ink-muted'}>{mg}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          <FlatList
+            data={filteredExercises}
+            keyExtractor={e => String(e.id)}
+            className="max-h-72"
+            ItemSeparatorComponent={() => <View className="h-px bg-ink-hairline" />}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => {
+                  if (pickerMode === 'filter') {
+                    setExpandedDate(null);
+                    void setHistoryExercise(item.id);
+                  }
+                  else {
+                    addExercise(item.id);
+                  }
+                  closePicker();
+                }}
+                className="py-3"
+              >
+                <Text className="text-base text-ink-text">{item.name}</Text>
+                <Text className="mt-0.5 text-xs text-ink-faint">
+                  {item.primary_muscle_group}
+                  {' · '}
+                  {item.equipment_type}
+                </Text>
+              </Pressable>
+            )}
+          />
+
+          <Button
+            label="Close"
+            variant="ghost"
+            onPress={closePicker}
+            className="mt-3"
+            textClassName="text-ink-muted no-underline"
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+
   // Group active sets by exercise, preserving each set's global index in activeSets
   type IndexedSet = typeof activeSets[number] & { globalIndex: number };
   const exerciseGroups = activeSets.reduce<Array<{ exerciseId: number; exerciseName: string; sets: IndexedSet[] }>>((groups, set, globalIndex) => {
@@ -334,7 +442,7 @@ export function WorkoutsScreen() {
           <Button
             label="Add exercise"
             variant="tonal"
-            onPress={() => setShowPicker(true)}
+            onPress={() => openPicker('add')}
             className="mt-2"
           />
         </ScrollView>
@@ -391,74 +499,7 @@ export function WorkoutsScreen() {
               </View>
             )}
 
-        {/* Exercise Picker Modal */}
-        <Modal visible={showPicker} animationType="slide" transparent>
-          <View className="flex-1 justify-end bg-black/60">
-            <View
-              className="max-h-[80%] rounded-t-3xl border-t border-ink-hairline bg-ink-card p-6"
-              style={{ paddingBottom: insets.bottom + 16 }}
-            >
-              <View className="mb-4 h-1 w-10 self-center rounded-full bg-ink-hairline" />
-              <Text className="mb-4 text-xl font-bold text-ink-text">Add exercise</Text>
-              <TextInput
-                placeholder="Search exercises…"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                className="mb-4 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
-                placeholderTextColor="#71717A"
-              />
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4 max-h-10">
-                {muscleGroups.map(mg => (
-                  <Pressable
-                    key={mg}
-                    onPress={() => setMuscleFilter(muscleFilter === mg ? null : mg)}
-                    className={`mr-2 rounded-full border px-3 py-1.5 ${muscleFilter === mg ? 'border-success-500 bg-success-500' : 'border-ink-hairline bg-transparent'}`}
-                  >
-                    <Text className={muscleFilter === mg ? 'text-sm font-semibold text-black' : 'text-sm text-ink-muted'}>{mg}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-
-              <FlatList
-                data={filteredExercises}
-                keyExtractor={e => String(e.id)}
-                className="max-h-72"
-                ItemSeparatorComponent={() => <View className="h-px bg-ink-hairline" />}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => {
-                      addExercise(item.id);
-                      setShowPicker(false);
-                      setSearchQuery('');
-                      setMuscleFilter(null);
-                    }}
-                    className="py-3"
-                  >
-                    <Text className="text-base text-ink-text">{item.name}</Text>
-                    <Text className="mt-0.5 text-xs text-ink-faint">
-                      {item.primary_muscle_group}
-                      {' · '}
-                      {item.equipment_type}
-                    </Text>
-                  </Pressable>
-                )}
-              />
-
-              <Button
-                label="Close"
-                variant="ghost"
-                onPress={() => {
-                  setShowPicker(false);
-                  setSearchQuery('');
-                  setMuscleFilter(null);
-                }}
-                className="mt-3"
-                textClassName="text-ink-muted no-underline"
-              />
-            </View>
-          </View>
-        </Modal>
+        {pickerModal}
       </View>
     );
   }
@@ -472,16 +513,53 @@ export function WorkoutsScreen() {
         refreshControl={<RefreshControl refreshing={false} onRefresh={loadData} tintColor="#22C55E" />}
       >
         <Text className="mb-1 text-3xl font-bold text-ink-text">Workouts</Text>
-        <Text className="mb-8 text-sm text-ink-faint">History</Text>
+        <Text className="mb-4 text-sm text-ink-faint">History</Text>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-5 mb-3" contentContainerClassName="px-5">
+          {HISTORY_RANGES.map(r => (
+            <Pressable
+              key={r.key}
+              onPress={() => {
+                setExpandedDate(null);
+                void setHistoryRange(r.key);
+              }}
+              className={`mr-2 rounded-full border px-3 py-1.5 ${historyRange === r.key ? 'border-success-500 bg-success-500' : 'border-ink-hairline bg-transparent'}`}
+            >
+              <Text className={historyRange === r.key ? 'text-sm font-semibold text-black' : 'text-sm text-ink-muted'}>{r.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <View className="mb-6 flex-row items-center gap-2">
+          <Pressable
+            onPress={() => openPicker('filter')}
+            className={`flex-1 rounded-xl border px-3 py-2 ${historyExerciseId != null ? 'border-success-500' : 'border-ink-hairline'}`}
+          >
+            <Text className={historyExerciseId != null ? 'text-sm font-semibold text-success-500' : 'text-sm text-ink-muted'} numberOfLines={1}>
+              {historyExerciseName ?? 'All exercises'}
+            </Text>
+          </Pressable>
+          {historyExerciseId != null && (
+            <Pressable
+              onPress={() => {
+                setExpandedDate(null);
+                void setHistoryExercise(null);
+              }}
+              className="rounded-xl border border-ink-hairline px-3 py-2"
+            >
+              <Text className="text-sm text-ink-muted">Clear</Text>
+            </Pressable>
+          )}
+        </View>
 
         {recentSessions.length === 0
           ? (
               <View className="rounded-2xl border border-ink-hairline bg-ink-card p-8">
                 <Text className="mb-2 text-center text-base text-ink-text">
-                  No workouts yet.
+                  {isHistoryFiltered ? 'No workouts match this filter.' : 'No workouts yet.'}
                 </Text>
                 <Text className="text-center text-sm text-ink-muted">
-                  Start your first session — your history will live here.
+                  {isHistoryFiltered ? 'Try a wider date range or a different exercise.' : 'Start your first session — your history will live here.'}
                 </Text>
               </View>
             )
@@ -521,7 +599,7 @@ export function WorkoutsScreen() {
                         className="py-4"
                       >
                         <View className="flex-row items-center justify-between">
-                          <Text className="text-base font-semibold text-ink-text">{formatRelativeDate(date)}</Text>
+                          <Text className="text-base font-semibold text-ink-text">{historyDateLabel(date)}</Text>
                           {summary !== '' && (
                             <Text className="text-xs text-ink-faint" style={NUM_STYLE}>{summary}</Text>
                           )}
@@ -633,6 +711,8 @@ export function WorkoutsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {pickerModal}
 
       {/* FAB */}
       <Pressable

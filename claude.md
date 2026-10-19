@@ -36,7 +36,7 @@ src/
 ├── lib/                          # Core infrastructure
 │   ├── db/                      # SQLite database layer
 │   │   ├── database.ts         # Schema + initialization
-│   │   ├── seed.ts             # 44 default exercises
+│   │   ├── seed.ts             # 79 default exercises
 │   │   ├── user-repo.ts        # User CRUD
 │   │   ├── workout-repo.ts     # Workout sessions + sets
 │   │   ├── body-metrics-repo.ts # Body measurements
