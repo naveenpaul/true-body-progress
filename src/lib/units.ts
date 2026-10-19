@@ -44,3 +44,19 @@ export function parseLengthInput(value: number, units: 'metric' | 'imperial'): n
   }
   return value;
 }
+
+// Distance is stored in metres; shown as km (metric) or miles (imperial).
+const METRES_PER_MILE = 1609.344;
+
+export function metresToDisplay(m: number, units: 'metric' | 'imperial'): number {
+  const v = units === 'imperial' ? m / METRES_PER_MILE : m / 1000;
+  return Math.round(v * 100) / 100;
+}
+
+export function displayToMetres(value: number, units: 'metric' | 'imperial'): number {
+  return Math.round(units === 'imperial' ? value * METRES_PER_MILE : value * 1000);
+}
+
+export function distanceUnit(units: 'metric' | 'imperial'): string {
+  return units === 'imperial' ? 'mi' : 'km';
+}

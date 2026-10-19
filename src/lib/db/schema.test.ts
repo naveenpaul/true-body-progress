@@ -5,6 +5,8 @@ import {
   exercise,
   food,
   nutritionEntry,
+  routine,
+  routineExercise,
   userProfile,
   workoutSession,
   workoutSet,
@@ -86,5 +88,18 @@ describe('db schema', () => {
         'idx_workout_set_session',
       ]),
     );
+  });
+
+  it('routine tables link exercises and sessions', () => {
+    expect(getTableConfig(routine).name).toBe('routine');
+    const re = getTableConfig(routineExercise);
+    expect(re.name).toBe('routine_exercise');
+    expect(re.foreignKeys).toHaveLength(2);
+    const sessionCols = getTableConfig(workoutSession).columns.map(c => c.name);
+    expect(sessionCols).toContain('routine_id');
+    const setCols = getTableConfig(workoutSet).columns.map(c => c.name);
+    expect(setCols).toEqual(expect.arrayContaining(['duration_sec', 'distance_m', 'bodyweight_kg']));
+    const exerciseCols = getTableConfig(exercise).columns.map(c => c.name);
+    expect(exerciseCols).toContain('tracking_type');
   });
 });

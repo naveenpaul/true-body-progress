@@ -26,7 +26,7 @@ src/
 │
 ├── features/                     # Feature modules
 │   ├── dashboard/               # Dashboard screen + coaching
-│   ├── workouts/                # Workout logging + store
+│   ├── workouts/                # Workout logging, routines, rest timer + store
 │   ├── body/                    # Body metrics + charts + store
 │   ├── nutrition/               # Nutrition tracking
 │   └── profile/                 # Profile setup + user store
@@ -36,9 +36,10 @@ src/
 ├── lib/                          # Core infrastructure
 │   ├── db/                      # SQLite database layer
 │   │   ├── database.ts         # Schema + initialization
-│   │   ├── seed.ts             # 79 default exercises
+│   │   ├── seed.ts             # 105 default exercises (incl. cardio + timed)
 │   │   ├── user-repo.ts        # User CRUD
 │   │   ├── workout-repo.ts     # Workout sessions + sets
+│   │   ├── routine-repo.ts     # Saved routines (Push/Pull/Legs) + rotation
 │   │   ├── body-metrics-repo.ts # Body measurements
 │   │   └── nutrition-repo.ts   # Nutrition entries
 │   ├── ai/                      # AI coaching (OpenRouter)
@@ -75,6 +76,8 @@ pnpm test               # Run Jest tests
 - **Styling**: NativeWind/Tailwind classes. Dark theme with green (#22C55E) accent.
 - **Routes**: Thin re-export files in `src/app/` pointing to feature screens.
 - **Coaching**: Rule engine runs first, optional LLM enhances via OpenRouter API.
+- **Exercise tracking types**: `weight_reps`, `bodyweight_reps` (volume = (body weight snapshot + added) × reps), `time` (duration_sec), `cardio` (duration_sec + distance_m). Volume SQL goes through `volumeSql()` in workout-repo.
+- **Native modules**: expo-audio / expo-haptics / expo-notifications (rest timer). Adding native modules needs a new dev build.
 - **Imports**: Always use `@/` prefix for absolute imports.
 
 ## How: Essential Rules

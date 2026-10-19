@@ -3,7 +3,21 @@
 export type GoalType = 'fat_loss' | 'muscle_gain' | 'recomposition';
 export type Gender = 'male' | 'female';
 export type UnitSystem = 'metric' | 'imperial';
-export type EquipmentType = 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'bodyweight';
+export type EquipmentType
+  = | 'barbell'
+    | 'dumbbell'
+    | 'cable'
+    | 'machine'
+    | 'bodyweight'
+    | 'kettlebell'
+    | 'smith_machine'
+    | 'ez_bar'
+    | 'band'
+    | 'cardio_machine';
+
+// weight_reps: kg × reps. bodyweight_reps: (body weight + added kg) × reps.
+// time: a timed hold (plank). cardio: duration + distance.
+export type TrackingType = 'weight_reps' | 'bodyweight_reps' | 'time' | 'cardio';
 
 export type User = {
   id: number;
@@ -24,6 +38,7 @@ export type Exercise = {
   primary_muscle_group: string;
   secondary_muscle_group: string | null;
   equipment_type: EquipmentType;
+  tracking_type: TrackingType;
   is_custom: boolean;
   created_at: string;
   updated_at: string;
@@ -33,9 +48,11 @@ export type WorkoutSession = {
   id: number;
   date: string;
   notes: string | null;
+  routine_id: number | null;
   created_at: string;
   updated_at: string;
   // Populated by getRecentSessions
+  routine_name?: string | null;
   set_count?: number;
   total_volume?: number;
   total_reps?: number;
@@ -48,9 +65,12 @@ export type WorkoutSet = {
   exercise_id: number;
   set_number: number;
   reps: number;
-  weight: number; // always stored in kg
+  weight: number; // always stored in kg (added weight for bodyweight exercises)
   rpe: number | null; // 1-10
   rest_time_sec: number | null;
+  duration_sec: number | null; // timed holds + cardio
+  distance_m: number | null; // cardio, stored in metres
+  bodyweight_kg: number | null; // body weight snapshot for bodyweight exercises
   created_at: string;
   updated_at: string;
 };
@@ -130,4 +150,39 @@ export type Suggestion = {
 export type WorkoutSetWithExercise = WorkoutSet & {
   exercise_name: string;
   equipment_type: EquipmentType;
+  tracking_type: TrackingType;
+};
+
+export type Routine = {
+  id: number;
+  name: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+  // Populated by getAllRoutines
+  exercise_count?: number;
+  exercise_names?: string | null;
+};
+
+export type RoutineExercise = {
+  id: number;
+  routine_id: number;
+  exercise_id: number;
+  position: number;
+  target_sets: number;
+  rep_min: number | null;
+  rep_max: number | null;
+};
+
+export type RoutineExerciseWithName = RoutineExercise & {
+  exercise_name: string;
+  tracking_type: TrackingType;
+};
+
+// Shape used when creating/replacing a routine's exercise list.
+export type RoutineExerciseInput = {
+  exercise_id: number;
+  target_sets: number;
+  rep_min: number | null;
+  rep_max: number | null;
 };

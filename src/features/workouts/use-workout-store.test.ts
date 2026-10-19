@@ -1,5 +1,16 @@
 import { useWorkoutStore } from './use-workout-store';
 
+// Fields added for tracking types / routines; irrelevant to these tests.
+const NEW_FIELDS = {
+  tracking_type: 'weight_reps' as const,
+  duration_sec: null,
+  distance_m: null,
+  prev_duration_sec: null,
+  prev_distance_m: null,
+  rep_min: null,
+  rep_max: null,
+};
+
 // These tests exercise pure local-state actions on the workout store
 // (addSet, updateSet, completeSet, removeSet) which do not touch SQLite.
 // They lock in three regressions found during the 2026-04-07 fix pass.
@@ -23,8 +34,8 @@ describe('useWorkoutStore — local state actions', () => {
       // Seed two sets for exercise 1
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'Bench', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
-          { exercise_id: 1, exercise_name: 'Bench', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
@@ -44,9 +55,9 @@ describe('useWorkoutStore — local state actions', () => {
     it('appends after existing sets when the exercise already has some', () => {
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'Bench', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
-          { exercise_id: 2, exercise_name: 'Squat', set_number: 1, reps: 5, weight: 100, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
-          { exercise_id: 1, exercise_name: 'Bench', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 2, exercise_name: 'Squat', set_number: 1, reps: 5, weight: 100, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
@@ -70,9 +81,9 @@ describe('useWorkoutStore — local state actions', () => {
     it('updates only the targeted index', () => {
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
-          { exercise_id: 1, exercise_name: 'A', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
-          { exercise_id: 1, exercise_name: 'A', set_number: 3, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'A', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'A', set_number: 3, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
@@ -87,7 +98,7 @@ describe('useWorkoutStore — local state actions', () => {
     it('survives rapid sequential updates without losing keystrokes', () => {
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 0, weight: 0, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 0, weight: 0, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
@@ -108,7 +119,7 @@ describe('useWorkoutStore — local state actions', () => {
     it('refuses to complete a set with reps=0', () => {
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 0, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 0, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
@@ -120,13 +131,31 @@ describe('useWorkoutStore — local state actions', () => {
     it('completes a set with reps>0', () => {
       useWorkoutStore.setState({
         activeSets: [
-          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null },
+          { exercise_id: 1, exercise_name: 'A', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
         ],
       });
 
       useWorkoutStore.getState().completeSet(0);
 
       expect(useWorkoutStore.getState().activeSets[0].completed).toBe(true);
+    });
+  });
+
+  describe('removeSet — renumbering', () => {
+    it('renumbers the remaining sets of that exercise only', () => {
+      useWorkoutStore.setState({
+        activeSets: [
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 1, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 2, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 1, exercise_name: 'Bench', set_number: 3, reps: 5, weight: 60, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+          { exercise_id: 2, exercise_name: 'Squat', set_number: 1, reps: 5, weight: 100, rpe: null, rest_time_sec: null, completed: false, prev_reps: null, prev_weight: null, ...NEW_FIELDS },
+        ],
+      });
+
+      useWorkoutStore.getState().removeSet(0);
+
+      const sets = useWorkoutStore.getState().activeSets;
+      expect(sets.map(s => [s.exercise_id, s.set_number])).toEqual([[1, 1], [1, 2], [2, 1]]);
     });
   });
 });

@@ -117,6 +117,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     'expo-localization',
     'expo-router',
+    // Rest-timer beep only — we never record, so skip the mic permission.
+    ['expo-audio', { microphonePermission: false, recordAudioAndroid: false }],
+    // Local notification so the rest timer still alerts when the phone is locked.
+    ['expo-notifications', { sounds: ['./assets/sounds/rest_done.wav'] }],
     ['app-icon-badge', appIconBadgeConfig],
     ['react-native-edge-to-edge'],
   ],
