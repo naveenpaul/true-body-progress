@@ -2,6 +2,14 @@ shellEmulator: true
 
 trustPolicy: no-downgrade
 
+# Published by their usual maintainers without provenance (hand-published
+# backports), which no-downgrade flags. Pinned to these exact versions so any
+# other release of these packages is still checked. Reviewed 2026-10-19.
+trustPolicyExclude:
+  - semver@6.3.1
+  - ua-parser-js@1.0.41
+  - react-native-worklets@0.5.2
+
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true
