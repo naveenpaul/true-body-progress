@@ -1,4 +1,4 @@
-import { formatDuration, formatRelativeDate, getHistoryRange, today } from './dates';
+import { daysAgo, formatDuration, formatRelativeDate, getHistoryRange, today } from './dates';
 
 describe('dates', () => {
   // Regression: today() previously used toISOString() which is UTC. Users in
@@ -101,5 +101,13 @@ describe('getHistoryRange', () => {
 
   it('last month wraps across the year boundary', () => {
     expect(getHistoryRange('last_month', new Date(2026, 0, 10))).toEqual({ from: '2025-12-01', to: '2025-12-31' });
+  });
+});
+
+describe('daysAgo', () => {
+  it('counts back in local days across month ends', () => {
+    expect(daysAgo(1, new Date(2026, 9, 1, 10))).toBe('2026-09-30');
+    expect(daysAgo(0, new Date(2026, 9, 20, 23, 59))).toBe('2026-10-20');
+    expect(daysAgo(-1, new Date(2026, 9, 31))).toBe('2026-11-01');
   });
 });

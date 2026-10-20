@@ -69,8 +69,12 @@ describe('routineChanged', () => {
     expect(routineChanged(plan, sets.map(s => ({ ...s, reps: 10, weight: 50 })))).toBe(false);
   });
 
-  it('detects added sets, removed exercises and reordering', () => {
-    expect(routineChanged(plan, [...sets, mkSet({ exercise_id: 2, set_number: 2 })])).toBe(true);
+  it('ignores extra or fewer sets', () => {
+    expect(routineChanged(plan, [...sets, mkSet({ exercise_id: 2, set_number: 2 })])).toBe(false);
+  });
+
+  it('detects added, removed and reordered exercises', () => {
+    expect(routineChanged(plan, [...sets, mkSet({ exercise_id: 3 })])).toBe(true);
     expect(routineChanged(plan, sets.slice(0, 2))).toBe(true);
     expect(routineChanged(plan, [sets[2], sets[0], sets[1]])).toBe(true);
   });

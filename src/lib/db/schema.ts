@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const userProfile = sqliteTable('user_profile', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -114,16 +114,25 @@ export const nutritionEntry = sqliteTable(
     protein: real('protein').notNull(),
     carbs: real('carbs').notNull(),
     fats: real('fats').notNull(),
+    // Null on entries logged before fiber was tracked.
+    fiber: real('fiber'),
     // Optional link to a food row when added via picker. Null for legacy /
     // freeform entries. servings is the multiplier on food.default_serving_qty.
     foodId: text('food_id').references(() => food.id, { onDelete: 'set null' }),
     servings: real('servings'),
+    // Set for meals pulled from the Notion meal log. source_ref is
+    // "<notion page id>:<column>" so a re-sync updates instead of duplicating;
+    // source_text is the cell text the macros were estimated from.
+    source: text('source', { enum: ['notion'] }),
+    sourceRef: text('source_ref'),
+    sourceText: text('source_text'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
   table => ({
     dateIdx: index('idx_nutrition_entry_date').on(table.date),
     foodIdx: index('idx_nutrition_entry_food').on(table.foodId),
+    sourceRefIdx: uniqueIndex('idx_nutrition_entry_source_ref').on(table.sourceRef),
   }),
 );
 

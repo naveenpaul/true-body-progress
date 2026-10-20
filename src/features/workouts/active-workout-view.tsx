@@ -56,7 +56,7 @@ export function ActiveWorkoutView({ onSaved }: { onSaved: () => void }) {
     if (activeRoutineChanged() && activeRoutineName) {
       Alert.alert(
         `Update ${activeRoutineName}?`,
-        'You changed the exercises or set counts. Save those changes to the routine for next time?',
+        'You added, removed or reordered exercises. Save that to the routine for next time?',
         [
           { text: 'Just this workout', onPress: () => void doSave(false) },
           { text: 'Update routine', onPress: () => void doSave(true) },
@@ -126,9 +126,15 @@ export function ActiveWorkoutView({ onSaved }: { onSaved: () => void }) {
 
       <ExercisePickerSheet
         visible={showPicker}
-        title="Add exercise"
+        multiSelect
+        title="Add exercises"
         exercises={exercises}
-        onSelect={ex => void addExercise(ex.id)}
+        alreadyAddedIds={[...new Set(activeSets.map(st => st.exercise_id))]}
+        onSelectMany={async (picked) => {
+          // Sequential so they appear in the order they were ticked.
+          for (const ex of picked)
+            await addExercise(ex.id);
+        }}
         onClose={() => setShowPicker(false)}
       />
     </View>

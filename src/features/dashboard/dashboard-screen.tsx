@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Text } from '@/components/ui';
 import { SimpleChart } from '@/features/body/components/simple-chart';
 import { useBodyStore } from '@/features/body/use-body-store';
+import { NutritionTrendsCard } from '@/features/nutrition/nutrition-trends-card';
 import { useUserStore } from '@/features/profile/use-user-store';
 import { useWorkoutStore } from '@/features/workouts/use-workout-store';
 import { getCoachSuggestions } from '@/lib/ai/coach-service';
@@ -291,6 +292,10 @@ export function DashboardScreen() {
                 </View>
               ))
             )}
+      </View>
+
+      <View className="mb-10 border-t border-ink-hairline pt-5">
+        <NutritionTrendsCard compact refreshKey={refreshTick} />
       </View>
 
       {/* Quick actions — real hierarchy: one primary, one tonal */}

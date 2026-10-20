@@ -94,8 +94,12 @@ export type NutritionEntry = {
   protein: number; // grams
   carbs: number; // grams
   fats: number; // grams
+  fiber: number | null; // grams; null on entries logged before fiber was tracked
   food_id: string | null;
   servings: number | null;
+  source: 'notion' | null;
+  source_ref: string | null; // "<notion page id>:<column>"
+  source_text: string | null; // the Notion cell text the macros were estimated from
   created_at: string;
   updated_at: string;
 };

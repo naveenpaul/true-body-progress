@@ -26,6 +26,7 @@ const SNAPSHOT = {
   daysLoggedLast7: 5,
   avgCalories: 2000,
   avgProteinG: 150,
+  nutritionTrends: ['Protein: 150 g/day vs 140 g/day (good)'],
   ruleFindings: [],
 };
 

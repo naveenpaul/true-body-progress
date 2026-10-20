@@ -9,13 +9,47 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui';
 import { useBodyStore } from '@/features/body/use-body-store';
 import { useUserStore } from '@/features/profile/use-user-store';
-import { today } from '@/lib/dates';
+import { addDays, formatShortDate, today } from '@/lib/dates';
 import { expoDb } from '@/lib/db';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
+import { MEAL_COLUMNS } from '@/lib/notion/notion-client';
 import { calculateMacroTargets, calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 import { FoodPicker } from './food-picker';
+import { isNotionConfigured, syncNotionMeals } from './notion-meal-sync';
+import { NutritionTrendsCard } from './nutrition-trends-card';
 
 const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
+
+// Notion meals in eating order (Pre-BF → Dinner), then manual entries as logged.
+function mealOrder(meal: NutritionEntry): number {
+  if (meal.source !== 'notion')
+    return MEAL_COLUMNS.length;
+  const idx = (MEAL_COLUMNS as readonly string[]).indexOf(meal.meal_name);
+  return idx === -1 ? MEAL_COLUMNS.length : idx;
+}
+
+type SyncStatus
+  = | { state: 'idle' }
+    | { state: 'syncing'; done: number; total: number }
+    | { state: 'done'; at: Date; failedDays: number }
+    | { state: 'error'; message: string };
+
+function syncLabel(status: SyncStatus): string | null {
+  switch (status.state) {
+    case 'idle':
+      return null;
+    case 'syncing':
+      return status.total > 0 ? `Syncing Notion… ${status.done}/${status.total} days` : 'Syncing Notion…';
+    case 'done': {
+      const time = status.at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      return status.failedDays > 0
+        ? `Synced from Notion at ${time} · ${status.failedDays} day(s) couldn't be estimated, pull to retry`
+        : `Synced from Notion at ${time}`;
+    }
+    case 'error':
+      return `Notion sync failed: ${status.message}`;
+  }
+}
 
 export function NutritionScreen() {
   const insets = useSafeAreaInsets();
@@ -25,10 +59,60 @@ export function NutritionScreen() {
   const [meals, setMeals] = useState<NutritionEntry[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [currentDate, setCurrentDate] = useState(today);
   const pickerRef = useRef<React.ElementRef<typeof FoodPicker>>(null);
 
-  const currentDate = today();
+  const isToday = currentDate === today();
   const refresh = () => setRefreshKey(k => k + 1);
+
+  const shiftDay = (delta: number) => {
+    const next = addDays(currentDate, delta);
+    if (next <= today())
+      setCurrentDate(next);
+  };
+
+  // Bumped to (re)run a Notion sync: once on mount, then on pull-to-refresh.
+  const [syncTick, setSyncTick] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() =>
+    isNotionConfigured() ? { state: 'syncing', done: 0, total: 0 } : { state: 'idle' });
+
+  useEffect(() => {
+    if (!isNotionConfigured())
+      return;
+    let cancelled = false;
+    (async () => {
+      let next: SyncStatus;
+      try {
+        const result = await syncNotionMeals(expoDb, (done, total) => {
+          if (cancelled)
+            return;
+          setSyncStatus({ state: 'syncing', done, total });
+          // Show each day's meals as soon as they land.
+          if (done > 0)
+            setRefreshKey(k => k + 1);
+        });
+        next = { state: 'done', at: new Date(), failedDays: result.failedDays };
+      }
+      catch (err) {
+        next = { state: 'error', message: err instanceof Error ? err.message : String(err) };
+      }
+      if (cancelled)
+        return;
+      setSyncStatus(next);
+      setRefreshKey(k => k + 1);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncTick]);
+
+  const onPullRefresh = () => {
+    refresh();
+    if (isNotionConfigured()) {
+      setSyncStatus({ state: 'syncing', done: 0, total: 0 });
+      setSyncTick(t => t + 1);
+    }
+  };
 
   const currentWeight = latest?.weight ?? user?.target_weight ?? 70;
   const tdee = user
@@ -48,7 +132,7 @@ export function NutritionScreen() {
       ]);
       if (cancelled)
         return;
-      setMeals(dayMeals);
+      setMeals([...dayMeals].sort((a, b) => mealOrder(a) - mealOrder(b)));
       setTotals(dayTotals);
     })();
     return () => {
@@ -71,10 +155,24 @@ export function NutritionScreen() {
       className="flex-1 bg-ink-base"
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 40 }}
       contentContainerClassName="px-5"
-      refreshControl={<RefreshControl refreshing={false} onRefresh={refresh} tintColor="#22C55E" />}
+      refreshControl={<RefreshControl refreshing={false} onRefresh={onPullRefresh} tintColor="#22C55E" />}
     >
       <Text className="mb-1 text-3xl font-bold text-ink-text">Nutrition</Text>
-      <Text className="mb-8 text-sm text-ink-faint">Today</Text>
+      <View className="mb-2 flex-row items-center gap-4">
+        <Pressable onPress={() => shiftDay(-1)} hitSlop={10}>
+          <Text className="text-lg text-ink-muted">‹</Text>
+        </Pressable>
+        <Text className="text-sm text-ink-faint">{isToday ? 'Today' : formatShortDate(currentDate)}</Text>
+        <Pressable onPress={() => shiftDay(1)} disabled={isToday} hitSlop={10}>
+          <Text className={`text-lg ${isToday ? 'text-ink-hairline' : 'text-ink-muted'}`}>›</Text>
+        </Pressable>
+      </View>
+      {syncLabel(syncStatus) != null && (
+        <Text className={`mb-6 text-xs ${syncStatus.state === 'error' ? 'text-danger-400' : 'text-ink-faint'}`}>
+          {syncLabel(syncStatus)}
+        </Text>
+      )}
+      {syncLabel(syncStatus) == null && <View className="mb-6" />}
 
       {/* Daily Summary - Macro Bars */}
       <View className="mb-10">
@@ -87,7 +185,7 @@ export function NutritionScreen() {
       {/* Meals Section */}
       <View>
         <View className="mb-3 flex-row items-baseline justify-between">
-          <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Today's meals</Text>
+          <Text className="text-xs font-bold text-ink-faint uppercase" style={{ letterSpacing: 0.8 }}>Meals</Text>
           <Pressable onPress={() => pickerRef.current?.present()}>
             <Text className="text-sm font-semibold text-success-500">+ Add meal</Text>
           </Pressable>
@@ -97,7 +195,9 @@ export function NutritionScreen() {
           ? (
               <View className="rounded-2xl border border-ink-hairline bg-ink-card p-6">
                 <Text className="text-center text-sm text-ink-muted">
-                  No meals logged today. Tap "+ Add meal" to start.
+                  {isNotionConfigured()
+                    ? 'No meals for this day. Log them in Notion and pull down to sync, or tap "+ Add meal".'
+                    : 'No meals logged. Tap "+ Add meal" to start.'}
                 </Text>
               </View>
             )
@@ -106,6 +206,9 @@ export function NutritionScreen() {
                 <View key={meal.id} className={`flex-row items-center py-3 ${idx > 0 ? 'border-t border-ink-hairline' : ''}`}>
                   <View className="flex-1">
                     <Text className="text-base text-ink-text">{meal.meal_name}</Text>
+                    {meal.source_text != null && (
+                      <Text className="mt-0.5 text-sm text-ink-muted" numberOfLines={3}>{meal.source_text}</Text>
+                    )}
                     <Text className="mt-0.5 text-xs text-ink-faint" style={NUM_STYLE}>
                       {Math.round(meal.calories)}
                       {' kcal · '}
@@ -119,12 +222,21 @@ export function NutritionScreen() {
                       F
                     </Text>
                   </View>
-                  <Pressable onPress={() => handleDelete(meal.id)} className="p-2">
-                    <Text className="text-ink-faint">✕</Text>
-                  </Pressable>
+                  {meal.source === 'notion'
+                    // Notion owns these; deleting here would just come back on the next sync.
+                    ? <Text className="p-2 text-[10px] text-ink-faint uppercase">Notion</Text>
+                    : (
+                        <Pressable onPress={() => handleDelete(meal.id)} className="p-2">
+                          <Text className="text-ink-faint">✕</Text>
+                        </Pressable>
+                      )}
                 </View>
               ))
             )}
+      </View>
+
+      <View className="mt-10 border-t border-ink-hairline pt-5">
+        <NutritionTrendsCard refreshKey={refreshKey} />
       </View>
 
       <FoodPicker ref={pickerRef} onPick={handlePick} />
