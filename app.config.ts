@@ -12,7 +12,10 @@ const EXPO_ACCOUNT_OWNER = 'mfiniti';
 const EAS_PROJECT_ID = '52625fb9-c21c-4f6b-a68d-ae3264a05801';
 
 const appIconBadgeConfig: AppIconBadgeConfig = {
-  enabled: Env.EXPO_PUBLIC_APP_ENV !== 'production',
+  // Off on EAS: the plugin writes the badged icon without awaiting it, so on a
+  // fresh build machine prebuild reads the file before it exists and crashes
+  // ("Could not find MIME for Buffer <null>"). Local runs work off a cached copy.
+  enabled: Env.EXPO_PUBLIC_APP_ENV !== 'production' && !process.env.EAS_BUILD,
   badges: [
     {
       text: Env.EXPO_PUBLIC_APP_ENV,
