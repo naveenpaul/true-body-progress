@@ -161,6 +161,12 @@ export async function deleteMeal(db: SQLiteDatabase, id: number): Promise<void> 
   await db.runAsync('DELETE FROM nutrition_entry WHERE id = ?', [id]);
 }
 
+// Removes every meal synced from Notion, e.g. after disconnecting it.
+export async function deleteNotionMeals(db: SQLiteDatabase): Promise<number> {
+  const result = await db.runAsync('DELETE FROM nutrition_entry WHERE source = \'notion\'');
+  return result.changes;
+}
+
 // Per-day rollup for the last N days. Used by coach service to compute averages.
 export async function getNutritionSummary(
   db: SQLiteDatabase,

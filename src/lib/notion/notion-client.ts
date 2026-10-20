@@ -1,8 +1,8 @@
 // Read-only client for the "Daily Meals" Notion database. Each row is a day
 // (Date property) with one free-text column per meal slot.
 
-const NOTION_API = 'https://api.notion.com/v1';
-const NOTION_VERSION = '2022-06-28';
+export const NOTION_API = 'https://api.notion.com/v1';
+export const NOTION_VERSION = '2022-06-28';
 
 // Meal columns in eating order. Other columns (Calories, Protein, Name…) are ignored.
 export const MEAL_COLUMNS = ['Pre-BF', 'BF', 'Lunch', 'Pre Dinner', 'Dinner'] as const;

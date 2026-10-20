@@ -102,6 +102,12 @@ export default function TabLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="notion"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
