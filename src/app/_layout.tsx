@@ -20,6 +20,7 @@ import { db, expoDb } from '@/lib/db';
 import { seedExercises, seedFoods } from '@/lib/db/seed';
 import { loadSelectedTheme } from '@/lib/hooks/use-selected-theme';
 import { loadSelectedLanguage } from '@/lib/i18n';
+import { loadNotionConnection } from '@/lib/notion/notion-connection';
 import { hydrateStorage } from '@/lib/storage';
 import migrations from '../../drizzle/migrations';
 
@@ -64,7 +65,7 @@ async function bootstrapNonDb() {
   if (bootstrapped)
     return;
   bootstrapped = true;
-  await hydrateStorage();
+  await Promise.all([hydrateStorage(), loadNotionConnection()]);
   loadSelectedLanguage();
   loadSelectedTheme();
   const key = process.env.EXPO_PUBLIC_GROQ_KEY;

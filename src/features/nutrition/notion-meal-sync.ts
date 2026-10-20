@@ -8,6 +8,7 @@ import { daysAgo } from '@/lib/dates';
 import * as foodsRepo from '@/lib/db/foods-repo';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { fetchMealRows, MEAL_COLUMNS } from '@/lib/notion/notion-client';
+import { getNotionConnection } from '@/lib/notion/notion-connection';
 
 // Notion is the source of truth for meals; the app keeps a local copy with
 // estimated macros. Only cells whose text changed (or that an older estimator
@@ -57,10 +58,6 @@ export function planSync(rows: NotionMealRow[], existing: NotionMealRef[]): Sync
   return plan;
 }
 
-export function isNotionConfigured(): boolean {
-  return !!process.env.EXPO_PUBLIC_NOTION_TOKEN && !!process.env.EXPO_PUBLIC_NOTION_MEALS_DB;
-}
-
 let inFlight: Promise<SyncResult> | null = null;
 
 // Concurrent callers (screen mount + pull-to-refresh) share one run.
@@ -75,10 +72,10 @@ export function syncNotionMeals(
 }
 
 async function runSync(db: SQLiteDatabase, onProgress?: (done: number, total: number) => void): Promise<SyncResult> {
-  const token = process.env.EXPO_PUBLIC_NOTION_TOKEN;
-  const databaseId = process.env.EXPO_PUBLIC_NOTION_MEALS_DB;
-  if (!token || !databaseId)
-    throw new Error('Notion is not configured (EXPO_PUBLIC_NOTION_TOKEN / EXPO_PUBLIC_NOTION_MEALS_DB)');
+  const connection = getNotionConnection();
+  if (!connection)
+    throw new Error('Notion is not connected (Settings → Notion meal log)');
+  const { token, databaseId } = connection;
 
   const since = daysAgo(SYNC_WINDOW_DAYS);
   const [rows, existing, foods] = await Promise.all([

@@ -13,9 +13,10 @@ import { addDays, formatShortDate, today } from '@/lib/dates';
 import { expoDb } from '@/lib/db';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { MEAL_COLUMNS } from '@/lib/notion/notion-client';
+import { useNotionConnection } from '@/lib/notion/notion-connection';
 import { calculateMacroTargets, calculateTargetCalories, calculateTDEE } from '@/lib/services/calculation-service';
 import { FoodPicker } from './food-picker';
-import { isNotionConfigured, syncNotionMeals } from './notion-meal-sync';
+import { syncNotionMeals } from './notion-meal-sync';
 import { NutritionTrendsCard } from './nutrition-trends-card';
 
 const NUM_STYLE: TextStyle = { fontVariant: ['tabular-nums'] };
@@ -71,13 +72,16 @@ export function NutritionScreen() {
       setCurrentDate(next);
   };
 
-  // Bumped to (re)run a Notion sync: once on mount, then on pull-to-refresh.
+  // Set in Settings; null means Notion sync is off and meals are manual only.
+  const notion = useNotionConnection();
+  // Bumped to (re)run a Notion sync: once on mount (or when Notion gets
+  // connected), then on pull-to-refresh.
   const [syncTick, setSyncTick] = useState(0);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() =>
-    isNotionConfigured() ? { state: 'syncing', done: 0, total: 0 } : { state: 'idle' });
+    notion ? { state: 'syncing', done: 0, total: 0 } : { state: 'idle' });
 
   useEffect(() => {
-    if (!isNotionConfigured())
+    if (!notion)
       return;
     let cancelled = false;
     (async () => {
@@ -104,11 +108,11 @@ export function NutritionScreen() {
     return () => {
       cancelled = true;
     };
-  }, [syncTick]);
+  }, [syncTick, notion]);
 
   const onPullRefresh = () => {
     refresh();
-    if (isNotionConfigured()) {
+    if (notion) {
       setSyncStatus({ state: 'syncing', done: 0, total: 0 });
       setSyncTick(t => t + 1);
     }
@@ -167,12 +171,12 @@ export function NutritionScreen() {
           <Text className={`text-lg ${isToday ? 'text-ink-hairline' : 'text-ink-muted'}`}>›</Text>
         </Pressable>
       </View>
-      {syncLabel(syncStatus) != null && (
+      {notion && syncLabel(syncStatus) != null && (
         <Text className={`mb-6 text-xs ${syncStatus.state === 'error' ? 'text-danger-400' : 'text-ink-faint'}`}>
           {syncLabel(syncStatus)}
         </Text>
       )}
-      {syncLabel(syncStatus) == null && <View className="mb-6" />}
+      {(!notion || syncLabel(syncStatus) == null) && <View className="mb-6" />}
 
       {/* Daily Summary - Macro Bars */}
       <View className="mb-10">
@@ -195,7 +199,7 @@ export function NutritionScreen() {
           ? (
               <View className="rounded-2xl border border-ink-hairline bg-ink-card p-6">
                 <Text className="text-center text-sm text-ink-muted">
-                  {isNotionConfigured()
+                  {notion
                     ? 'No meals for this day. Log them in Notion and pull down to sync, or tap "+ Add meal".'
                     : 'No meals logged. Tap "+ Add meal" to start.'}
                 </Text>
