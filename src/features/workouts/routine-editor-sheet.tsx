@@ -27,29 +27,17 @@ type Props = {
   onClose: () => void;
 };
 
-function parseOptionalInt(s: string): number | null {
-  const n = Number.parseInt(s, 10);
-  return Number.isNaN(n) || n <= 0 ? null : n;
-}
-
-function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <View className="flex-row items-center gap-2">
-      <Pressable
-        onPress={() => onChange(Math.max(1, value - 1))}
-        className="size-7 items-center justify-center rounded-full border border-ink-hairline"
-      >
-        <Text className="text-ink-text">−</Text>
-      </Pressable>
-      <Text className="w-5 text-center text-sm font-semibold text-ink-text">{value}</Text>
-      <Pressable
-        onPress={() => onChange(Math.min(20, value + 1))}
-        className="size-7 items-center justify-center rounded-full border border-ink-hairline"
-      >
-        <Text className="text-ink-text">+</Text>
-      </Pressable>
-    </View>
-  );
+// "Chest & Shoulders" from the two most common primary muscles, used when the
+// name is left blank so saving never blocks on naming.
+function defaultRoutineName(items: RoutineDraftItem[], exercises: Exercise[]): string {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const muscle = exercises.find(e => e.id === it.exercise_id)?.primary_muscle_group;
+    if (muscle)
+      counts.set(muscle, (counts.get(muscle) ?? 0) + 1);
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([m]) => m.charAt(0).toUpperCase() + m.slice(1));
+  return top.length > 0 ? top.join(' & ') : 'My routine';
 }
 
 export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLater, onSave, onDelete, onMove, onClose }: Props) {
@@ -59,9 +47,6 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
   const [name, setName] = useState(() => draft?.name ?? '');
   const [items, setItems] = useState<RoutineDraftItem[]>(() => draft?.items ?? []);
   const [showPicker, setShowPicker] = useState(false);
-
-  const updateItem = (idx: number, patch: Partial<RoutineDraftItem>) =>
-    setItems(prev => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
 
   const moveItem = (idx: number, dir: -1 | 1) =>
     setItems((prev) => {
@@ -74,16 +59,11 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
     });
 
   const save = () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      Alert.alert('Name your routine', 'e.g. Push Day, Legs, Upper A.');
-      return;
-    }
     if (items.length === 0) {
       Alert.alert('Add an exercise', 'A routine needs at least one exercise.');
       return;
     }
-    onSave({ id: draft?.id ?? null, name: trimmed, items });
+    onSave({ id: draft?.id ?? null, name: name.trim() || defaultRoutineName(items, exercises), items });
   };
 
   const confirmDelete = () => {
@@ -97,7 +77,20 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
   };
 
   return (
-    <Modal visible={draft != null} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal
+      visible={draft != null}
+      animationType="slide"
+      transparent
+      onRequestClose={onClose}
+      // A new, empty routine opens straight into the exercise picker. Wait until
+      // this sheet is on screen: Android never presents a nested Modal that is
+      // already visible while its parent is still animating in, which left
+      // showPicker stuck at true and "+ Add exercises" doing nothing.
+      onShow={() => {
+        if (draft != null && items.length === 0)
+          setShowPicker(true);
+      }}
+    >
       <View className="flex-1 justify-end bg-black/60">
         <View
           className="max-h-[90%] rounded-t-3xl border-t border-ink-hairline bg-ink-card p-6"
@@ -107,7 +100,7 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
           <Text className="mb-3 text-xl font-bold text-ink-text">{draft?.id == null ? 'New routine' : 'Edit routine'}</Text>
 
           <TextInput
-            placeholder="Routine name (e.g. Push Day)"
+            placeholder="Name (optional, e.g. Push Day)"
             value={name}
             onChangeText={setName}
             className="mb-4 rounded-xl border border-ink-hairline bg-ink-base px-4 py-3 text-base text-ink-text"
@@ -120,7 +113,7 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
             )}
             {items.map((it, idx) => (
               <View key={it.exercise_id} className="border-b border-ink-hairline py-3">
-                <View className="mb-2 flex-row items-center justify-between">
+                <View className="flex-row items-center justify-between">
                   <Text className="flex-1 text-base font-semibold text-ink-text" numberOfLines={1}>{it.exercise_name}</Text>
                   <View className="flex-row items-center gap-3">
                     <Pressable onPress={() => moveItem(idx, -1)} disabled={idx === 0} hitSlop={6}>
@@ -134,36 +127,10 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
                     </Pressable>
                   </View>
                 </View>
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center gap-2">
-                    <Text className="text-xs text-ink-faint uppercase">Sets</Text>
-                    <Stepper value={it.target_sets} onChange={v => updateItem(idx, { target_sets: v })} />
-                  </View>
-                  <View className="flex-row items-center gap-1">
-                    <Text className="mr-1 text-xs text-ink-faint uppercase">Reps</Text>
-                    <TextInput
-                      keyboardType="number-pad"
-                      placeholder="8"
-                      value={it.rep_min != null ? String(it.rep_min) : ''}
-                      onChangeText={v => updateItem(idx, { rep_min: parseOptionalInt(v) })}
-                      className="h-8 w-10 rounded-md border border-ink-hairline bg-ink-base text-center text-sm text-ink-text"
-                      placeholderTextColor="#52525B"
-                    />
-                    <Text className="text-ink-faint">–</Text>
-                    <TextInput
-                      keyboardType="number-pad"
-                      placeholder="12"
-                      value={it.rep_max != null ? String(it.rep_max) : ''}
-                      onChangeText={v => updateItem(idx, { rep_max: parseOptionalInt(v) })}
-                      className="h-8 w-10 rounded-md border border-ink-hairline bg-ink-base text-center text-sm text-ink-text"
-                      placeholderTextColor="#52525B"
-                    />
-                  </View>
-                </View>
               </View>
             ))}
             <Pressable onPress={() => setShowPicker(true)} className="py-3">
-              <Text className="text-center text-sm font-semibold text-success-500">+ Add exercise</Text>
+              <Text className="text-center text-sm font-semibold text-success-500">+ Add exercises</Text>
             </Pressable>
           </ScrollView>
 
@@ -189,19 +156,21 @@ export function RoutineEditorSheet({ draft, exercises, canMoveEarlier, canMoveLa
 
         <ExercisePickerSheet
           visible={showPicker}
+          multiSelect
           title="Add to routine"
           exercises={exercises}
-          onSelect={ex =>
-            // Each exercise appears once per routine; use the sets stepper for more.
-            setItems(prev => prev.some(it => it.exercise_id === ex.id)
-              ? prev
-              : [...prev, {
-                  exercise_id: ex.id,
-                  exercise_name: ex.name,
-                  target_sets: ex.tracking_type === 'cardio' ? 1 : 3,
-                  rep_min: null,
-                  rep_max: null,
-                }])}
+          alreadyAddedIds={items.map(it => it.exercise_id)}
+          onSelectMany={picked =>
+            setItems(prev => [
+              ...prev,
+              ...picked.map(ex => ({
+                exercise_id: ex.id,
+                exercise_name: ex.name,
+                target_sets: ex.tracking_type === 'cardio' ? 1 : 3,
+                rep_min: null,
+                rep_max: null,
+              })),
+            ])}
           onClose={() => setShowPicker(false)}
         />
       </View>

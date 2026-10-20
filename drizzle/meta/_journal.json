@@ -29,6 +29,20 @@
       "when": 1792417092494,
       "tag": "0003_routines_tracking",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792472911073,
+      "tag": "0004_notion_meal_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792473786671,
+      "tag": "0005_nutrition_fiber",
+      "breakpoints": true
     }
   ]
 }

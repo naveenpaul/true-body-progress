@@ -9,10 +9,19 @@ type DataPoint = {
   label: string;
 };
 
+// Extra per-point markers drawn behind the line (e.g. raw daily values under a
+// rolling average). `index` is the position in `data`.
+type Dot = {
+  index: number;
+  value: number;
+  dim?: boolean;
+};
+
 type Props = {
   data: DataPoint[];
   height?: number;
   color?: string;
+  dots?: Dot[];
 };
 
 const Y_AXIS_WIDTH = 36;
@@ -20,7 +29,7 @@ const PADDING_TOP = 8;
 const PADDING_BOTTOM = 18;
 const PADDING_RIGHT = 8;
 
-export function SimpleChart({ data, height = 140, color = '#22C55E' }: Props) {
+export function SimpleChart({ data, height = 140, color = '#22C55E', dots = [] }: Props) {
   const [chartWidth, setChartWidth] = React.useState(0);
 
   // We need at least two points to draw a line. With one point we'd just have a
@@ -28,7 +37,7 @@ export function SimpleChart({ data, height = 140, color = '#22C55E' }: Props) {
   if (data.length < 2)
     return null;
 
-  const values = data.map(d => d.value);
+  const values = [...data.map(d => d.value), ...dots.map(d => d.value)];
   const min = Math.min(...values);
   const max = Math.max(...values);
   // Add 5% padding to the range so the line never hugs the top/bottom edges.
@@ -116,6 +125,17 @@ export function SimpleChart({ data, height = 140, color = '#22C55E' }: Props) {
                 stroke="#26272D"
                 strokeWidth={1}
               />
+
+              {dots.map(d => (
+                <Circle
+                  key={d.index}
+                  cx={xFor(d.index)}
+                  cy={yFor(d.value)}
+                  r={2.5}
+                  fill={color}
+                  fillOpacity={d.dim ? 0.2 : 0.55}
+                />
+              ))}
 
               {/* Filled area under the line — gives the trend visual weight without
                   needing a gradient. 12% opacity stays subtle on dark surfaces. */}

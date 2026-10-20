@@ -1,0 +1,1 @@
+ALTER TABLE `nutrition_entry` ADD `fiber` real;

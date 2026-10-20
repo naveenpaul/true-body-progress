@@ -282,8 +282,10 @@ const _useWorkoutStore = create<WorkoutState>((set, get) => ({
 
     const prevSets = await workoutRepo.getLastSetsForExercise(expoDb, exerciseId);
     const tracking = exercise.tracking_type ?? 'weight_reps';
-    // Routine target wins; otherwise repeat last time's set count (min 3, or 1 for cardio).
-    const numSets = target?.target_sets ?? Math.max(prevSets.length, tracking === 'cardio' ? 1 : 3);
+    // Repeat last time's set count. First time: the routine's count, else 3 (1 for cardio).
+    const numSets = prevSets.length > 0
+      ? prevSets.length
+      : target?.target_sets ?? (tracking === 'cardio' ? 1 : 3);
 
     const newSets: ActiveSet[] = [];
     for (let i = 0; i < numSets; i++) {

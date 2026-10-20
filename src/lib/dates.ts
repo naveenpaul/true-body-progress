@@ -10,11 +10,21 @@ export function today(): string {
   return formatLocalYMD(new Date());
 }
 
+// YYYY-MM-DD for `days` days before `now` (local time).
+export function daysAgo(days: number, now: Date = new Date()): string {
+  return formatLocalYMD(new Date(now.getFullYear(), now.getMonth(), now.getDate() - days));
+}
+
 // Parse a YYYY-MM-DD string as a local-time Date (midnight in the local zone).
 // Avoids `new Date('2026-04-07')` which is parsed as UTC.
 function parseLocalYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+// YYYY-MM-DD shifted by `days` (negative = earlier).
+export function addDays(dateStr: string, days: number): string {
+  return daysAgo(-days, parseLocalYMD(dateStr));
 }
 
 export function formatRelativeDate(dateStr: string): string {

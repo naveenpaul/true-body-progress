@@ -46,13 +46,13 @@ export function summarizeActiveSets(sets: ActiveSet[]): RoutineExerciseInput[] {
   return out;
 }
 
-// True when the workout's exercise list (order, set counts) no longer matches
-// the routine it was started from.
+// True when exercises were added, removed or reordered compared to the routine
+// the workout was started from. Set counts don't count — they follow last time.
 export function routineChanged(plan: RoutineExerciseInput[], sets: ActiveSet[]): boolean {
   const actual = summarizeActiveSets(sets);
   if (actual.length !== plan.length)
     return true;
-  return actual.some((a, i) => a.exercise_id !== plan[i].exercise_id || a.target_sets !== plan[i].target_sets);
+  return actual.some((a, i) => a.exercise_id !== plan[i].exercise_id);
 }
 
 // Suggested load jump once the top of the rep range is hit on every set.

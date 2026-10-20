@@ -3,10 +3,10 @@
 // when not configured. Groq is direct (no aggregator), so the free tier is
 // per-account rather than a contended shared pool.
 
-const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
+export const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Default Groq model. Override at build time with EXPO_PUBLIC_GROQ_MODEL.
-export const DEFAULT_LLM_MODEL = 'llama-3.3-70b-versatile';
+export const DEFAULT_LLM_MODEL = 'openai/gpt-oss-120b';
 
 type LLMConfig = {
   apiKey: string;
@@ -25,6 +25,12 @@ export function resetLLMForTests(): void {
 
 export function getLLMConfig(): LLMConfig | null {
   return config;
+}
+
+// gpt-oss models think before answering; keep it short so the reply fits in
+// max_tokens and leave the thinking out of the response.
+export function reasoningParams(model: string): Record<string, unknown> {
+  return model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {};
 }
 
 export function isLLMConfigured(): boolean {
@@ -51,6 +57,8 @@ export type CoachSnapshot = {
   daysLoggedLast7: number;
   avgCalories: number;
   avgProteinG: number;
+  // Macro trends, this week vs last (protein/fiber should rise, carbs/fat fall)
+  nutritionTrends: string[];
   // Rule findings
   ruleFindings: Array<{ title: string; body: string }>;
 };
@@ -87,6 +95,7 @@ export async function getCoachInsight(snapshot: CoachSnapshot): Promise<CoachIns
         ],
         max_tokens: 400,
         temperature: 0.4,
+        ...reasoningParams(config.model),
       }),
     });
 
@@ -151,6 +160,11 @@ function buildPrompt(s: CoachSnapshot): string {
   if (s.daysLoggedLast7 > 0) {
     lines.push(`- Avg calories: ${Math.round(s.avgCalories)} kcal`);
     lines.push(`- Avg protein: ${Math.round(s.avgProteinG)} g`);
+  }
+  if (s.nutritionTrends.length > 0) {
+    lines.push('Macro trends, this week vs last (their goal: protein and fiber up, carbs and fat down):');
+    for (const t of s.nutritionTrends)
+      lines.push(`- ${t}`);
   }
   if (s.ruleFindings.length > 0) {
     lines.push('');

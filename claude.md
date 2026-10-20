@@ -77,6 +77,8 @@ pnpm test               # Run Jest tests
 - **Routes**: Thin re-export files in `src/app/` pointing to feature screens.
 - **Coaching**: Rule engine runs first, optional LLM enhances via OpenRouter API.
 - **Exercise tracking types**: `weight_reps`, `bodyweight_reps` (volume = (body weight snapshot + added) × reps), `time` (duration_sec), `cardio` (duration_sec + distance_m). Volume SQL goes through `volumeSql()` in workout-repo.
+- **Notion meal sync**: Nutrition screen pulls the "Daily Meals" Notion database (columns Pre-BF/BF/Lunch/Pre Dinner/Dinner, read-only) via `src/lib/notion/`, estimates macros per day with Groq (`src/lib/ai/meal-estimator.ts`, grams × per-100g), and upserts into `nutrition_entry` keyed by `source_ref` = `<page id>:<column>`. Only cells whose text changed are re-estimated. Needs `EXPO_PUBLIC_NOTION_TOKEN` + `EXPO_PUBLIC_NOTION_MEALS_DB` in `.env`.
+- **Nutrition trends**: `src/lib/services/nutrition-trends.ts` (pure, tested) builds 7-day rolling averages and this-week-vs-last deltas for protein/fiber (want ↑) and carbs/fat (want ↓, also as % of calories). Days with < 3 meals are plotted but excluded from averages. Rendered by `NutritionTrendsCard` on the Nutrition tab and (compact) on the Dashboard; also fed to the coach prompt.
 - **Native modules**: expo-audio / expo-haptics / expo-notifications (rest timer). Adding native modules needs a new dev build.
 - **Imports**: Always use `@/` prefix for absolute imports.
 

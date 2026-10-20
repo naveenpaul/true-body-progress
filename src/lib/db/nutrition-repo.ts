@@ -10,11 +10,11 @@ export async function logMeal(
   protein: number,
   carbs: number,
   fats: number,
-  options: { foodId?: string | null; servings?: number | null } = {},
+  options: { foodId?: string | null; servings?: number | null; fiber?: number | null } = {},
 ): Promise<number> {
   const result = await db.runAsync(
-    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, food_id, servings)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, fiber, food_id, servings)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       date,
       mealName,
@@ -22,6 +22,7 @@ export async function logMeal(
       protein,
       carbs,
       fats,
+      options.fiber ?? null,
       options.foodId ?? null,
       options.servings ?? null,
     ],
@@ -42,6 +43,7 @@ export async function logMealFromFood(
     protein_g: number;
     carbs_g: number;
     fat_g: number;
+    fiber_g?: number | null;
   },
   servings: number,
 ): Promise<number> {
@@ -53,7 +55,7 @@ export async function logMealFromFood(
     food.protein_g * servings,
     food.carbs_g * servings,
     food.fat_g * servings,
-    { foodId: food.id, servings },
+    { foodId: food.id, servings, fiber: food.fiber_g != null ? food.fiber_g * servings : null },
   );
 }
 
@@ -83,6 +85,75 @@ export async function getMealsForDate(db: SQLiteDatabase, date: string): Promise
     'SELECT * FROM nutrition_entry WHERE date = ? ORDER BY created_at',
     [date],
   );
+}
+
+export type NotionMealRef = { id: number; date: string; source_ref: string; source_text: string; fiber: number | null };
+
+export async function getNotionMealsSince(db: SQLiteDatabase, sinceDate: string): Promise<NotionMealRef[]> {
+  return db.getAllAsync<NotionMealRef>(
+    `SELECT id, date, source_ref, source_text, fiber FROM nutrition_entry
+     WHERE source = 'notion' AND date >= ?`,
+    [sinceDate],
+  );
+}
+
+// Insert or replace the entry for one Notion cell, keyed by source_ref.
+export async function upsertNotionMeal(
+  db: SQLiteDatabase,
+  meal: {
+    sourceRef: string;
+    date: string;
+    mealName: string;
+    text: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fats: number;
+    fiber: number;
+  },
+): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, fiber, source, source_ref, source_text)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'notion', ?, ?)
+     ON CONFLICT(source_ref) DO UPDATE SET
+       date = excluded.date, meal_name = excluded.meal_name,
+       calories = excluded.calories, protein = excluded.protein,
+       carbs = excluded.carbs, fats = excluded.fats, fiber = excluded.fiber,
+       source_text = excluded.source_text, updated_at = datetime('now')`,
+    [meal.date, meal.mealName, meal.calories, meal.protein, meal.carbs, meal.fats, meal.fiber, meal.sourceRef, meal.text],
+  );
+}
+
+export type DailyNutrition = {
+  date: string;
+  meals: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+};
+
+// One row per logged day since `sinceDate`, oldest first. Used for trend charts.
+export async function getDailyNutrition(db: SQLiteDatabase, sinceDate: string): Promise<DailyNutrition[]> {
+  return db.getAllAsync<DailyNutrition>(
+    `SELECT date,
+            COUNT(*) as meals,
+            SUM(calories) as calories,
+            SUM(protein) as protein,
+            SUM(carbs) as carbs,
+            SUM(fats) as fats,
+            COALESCE(SUM(fiber), 0) as fiber
+     FROM nutrition_entry
+     WHERE date >= ?
+     GROUP BY date
+     ORDER BY date`,
+    [sinceDate],
+  );
+}
+
+export async function setMealDate(db: SQLiteDatabase, id: number, date: string): Promise<void> {
+  await db.runAsync(`UPDATE nutrition_entry SET date = ?, updated_at = datetime('now') WHERE id = ?`, [date, id]);
 }
 
 export async function deleteMeal(db: SQLiteDatabase, id: number): Promise<void> {
