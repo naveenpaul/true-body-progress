@@ -1,16 +1,18 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { Macros } from '@/lib/ai/meal-estimator';
+import type { MealEstimate } from '@/lib/ai/meal-estimator';
 import type { NotionMealRef } from '@/lib/db/nutrition-repo';
 import type { MealColumn, NotionMealRow } from '@/lib/notion/notion-client';
-import { estimateMeals } from '@/lib/ai/meal-estimator';
+import { estimateMeals, ESTIMATOR_VERSION } from '@/lib/ai/meal-estimator';
 import { daysAgo } from '@/lib/dates';
+import * as foodsRepo from '@/lib/db/foods-repo';
 import * as nutritionRepo from '@/lib/db/nutrition-repo';
 import { fetchMealRows, MEAL_COLUMNS } from '@/lib/notion/notion-client';
 
 // Notion is the source of truth for meals; the app keeps a local copy with
-// estimated macros. Only cells whose text changed are re-estimated, so a
-// re-sync costs one Groq call per edited day.
+// estimated macros. Only cells whose text changed (or that an older estimator
+// version produced) are re-estimated, so a re-sync costs one Groq call per
+// edited day.
 
 const SYNC_WINDOW_DAYS = 90;
 
@@ -38,8 +40,7 @@ export function planSync(rows: NotionMealRow[], existing: NotionMealRef[]): Sync
       const ref = mealRef(row.pageId, col);
       seen.add(ref);
       const prev = byRef.get(ref);
-      // fiber == null: estimated before fiber was tracked, so redo it once.
-      if (!prev || prev.source_text !== text || prev.fiber == null)
+      if (!prev || prev.source_text !== text || (prev.estimate_version ?? 1) < ESTIMATOR_VERSION)
         changed[col] = text;
       else if (prev.date !== row.date)
         plan.moveDate.push({ id: prev.id, date: row.date });
@@ -80,9 +81,10 @@ async function runSync(db: SQLiteDatabase, onProgress?: (done: number, total: nu
     throw new Error('Notion is not configured (EXPO_PUBLIC_NOTION_TOKEN / EXPO_PUBLIC_NOTION_MEALS_DB)');
 
   const since = daysAgo(SYNC_WINDOW_DAYS);
-  const [rows, existing] = await Promise.all([
+  const [rows, existing, foods] = await Promise.all([
     fetchMealRows(token, databaseId, since),
     nutritionRepo.getNotionMealsSince(db, since),
+    foodsRepo.getReferenceFoods(db),
   ]);
   const plan = planSync(rows, existing);
 
@@ -97,9 +99,17 @@ async function runSync(db: SQLiteDatabase, onProgress?: (done: number, total: nu
   let failedDays = 0;
   onProgress?.(0, days.length);
   for (const [i, day] of days.entries()) {
-    let estimates: Record<string, Macros>;
+    let estimate: MealEstimate;
     try {
-      estimates = await estimateMeals(day.meals as Record<string, string>);
+      estimate = await estimateMeals(day.meals as Record<string, string>, foods);
+      if (estimate.learned.length > 0) {
+        await foodsRepo.saveLearnedFoods(db, estimate.learned);
+        // Later days in this sync reuse the same numbers for these items.
+        for (const l of estimate.learned) {
+          if (!foods.some(f => f.id === `est:${l.key}`))
+            foods.push({ id: `est:${l.key}`, name: l.name, per100g: l.per100g, servingGrams: null });
+        }
+      }
     }
     catch (err) {
       // Leave this day's old values; the unchanged text check retries it next sync.
@@ -110,7 +120,7 @@ async function runSync(db: SQLiteDatabase, onProgress?: (done: number, total: nu
     }
     for (const col of MEAL_COLUMNS) {
       const text = day.meals[col];
-      const macros = estimates[col];
+      const macros = estimate.macros[col];
       if (!text || !macros)
         continue;
       await nutritionRepo.upsertNotionMeal(db, {
@@ -119,6 +129,7 @@ async function runSync(db: SQLiteDatabase, onProgress?: (done: number, total: nu
         mealName: col,
         text,
         ...macros,
+        estimateVersion: ESTIMATOR_VERSION,
       });
       updated++;
     }

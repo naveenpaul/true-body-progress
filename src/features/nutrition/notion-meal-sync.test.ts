@@ -1,7 +1,8 @@
+import { ESTIMATOR_VERSION } from '@/lib/ai/meal-estimator';
 import { planSync } from './notion-meal-sync';
 
-function existing(id: number, ref: string, text: string, date = '2026-10-19', fiber: number | null = 2) {
-  return { id, source_ref: ref, source_text: text, date, fiber };
+function existing(id: number, ref: string, text: string, date = '2026-10-19', version: number | null = ESTIMATOR_VERSION) {
+  return { id, source_ref: ref, source_text: text, date, estimate_version: version };
 }
 
 describe('planSync', () => {
@@ -33,7 +34,7 @@ describe('planSync', () => {
     expect(plan.moveDate).toEqual([{ id: 1, date: '2026-10-18' }]);
   });
 
-  it('re-estimates meals logged before fiber was tracked', () => {
+  it('re-estimates meals from an older estimator version', () => {
     const plan = planSync(
       [{ pageId: 'p1', date: '2026-10-19', meals: { BF: '2 idlis', Lunch: 'rice' } }],
       [existing(1, 'p1:BF', '2 idlis', '2026-10-19', null), existing(2, 'p1:Lunch', 'rice')],

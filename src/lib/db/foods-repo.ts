@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import type { LearnedFood, ReferenceFood } from '@/lib/ai/meal-estimator';
 import type { Cuisine, Food, FoodSeed } from '@/lib/types';
 
 // FTS5 virtual table mirrors `food` for typo-tolerant prefix search.
@@ -42,6 +43,48 @@ export async function rebuildFoodsFtsIfEmpty(db: SQLiteDatabase): Promise<void> 
     return;
   await db.execAsync('DELETE FROM food_fts');
   await db.runAsync('INSERT INTO food_fts(id, name) SELECT id, name FROM food');
+}
+
+// Food database + previously learned items, as per-100g values for the meal
+// estimator. Foods without a gram weight can't be scaled, so they're skipped.
+export async function getReferenceFoods(db: SQLiteDatabase): Promise<ReferenceFood[]> {
+  const [foods, learned] = await Promise.all([
+    db.getAllAsync<{ id: string; name: string; grams: number; kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number | null }>(
+      `SELECT id, name, default_serving_grams as grams, kcal, protein_g, carbs_g, fat_g, fiber_g
+       FROM food WHERE default_serving_grams > 0`,
+    ),
+    db.getAllAsync<{ key: string; name: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number }>(
+      'SELECT key, name, kcal, protein_g, carbs_g, fat_g, fiber_g FROM estimated_food',
+    ),
+  ]);
+  return [
+    ...foods.map((f) => {
+      const k = 100 / f.grams;
+      return {
+        id: f.id,
+        name: f.name,
+        per100g: { calories: f.kcal * k, protein: f.protein_g * k, carbs: f.carbs_g * k, fats: f.fat_g * k, fiber: (f.fiber_g ?? 0) * k },
+        servingGrams: f.grams,
+      };
+    }),
+    ...learned.map(l => ({
+      id: `est:${l.key}`,
+      name: l.name,
+      per100g: { calories: l.kcal, protein: l.protein_g, carbs: l.carbs_g, fats: l.fat_g, fiber: l.fiber_g },
+      servingGrams: null,
+    })),
+  ];
+}
+
+// First estimate wins, so a learned item keeps the same numbers on every sync.
+export async function saveLearnedFoods(db: SQLiteDatabase, learned: LearnedFood[]): Promise<void> {
+  for (const l of learned) {
+    await db.runAsync(
+      `INSERT OR IGNORE INTO estimated_food (key, name, kcal, protein_g, carbs_g, fat_g, fiber_g)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [l.key, l.name, l.per100g.calories, l.per100g.protein, l.per100g.carbs, l.per100g.fats, l.per100g.fiber],
+    );
+  }
 }
 
 export async function seedFoodsFromJson(
