@@ -100,6 +100,7 @@ export type NutritionEntry = {
   source: 'notion' | null;
   source_ref: string | null; // "<notion page id>:<column>"
   source_text: string | null; // the Notion cell text the macros were estimated from
+  estimate_version: number | null; // meal estimator version for Notion entries
   created_at: string;
   updated_at: string;
 };

@@ -126,6 +126,9 @@ export const nutritionEntry = sqliteTable(
     source: text('source', { enum: ['notion'] }),
     sourceRef: text('source_ref'),
     sourceText: text('source_text'),
+    // Which version of the meal estimator produced the macros; older Notion
+    // entries are re-estimated on sync when the estimator improves.
+    estimateVersion: integer('estimate_version'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
     updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   },
@@ -203,3 +206,16 @@ export const routineExercise = sqliteTable(
     routineIdx: index('idx_routine_exercise_routine').on(table.routineId, table.position),
   }),
 );
+
+// Per-100g values Groq estimated for meal items that aren't in the food
+// database, saved so the same item gets the same numbers on every sync.
+export const estimatedFood = sqliteTable('estimated_food', {
+  key: text('key').primaryKey(), // normalized item name
+  name: text('name').notNull(),
+  kcal: real('kcal').notNull(),
+  proteinG: real('protein_g').notNull(),
+  carbsG: real('carbs_g').notNull(),
+  fatG: real('fat_g').notNull(),
+  fiberG: real('fiber_g').notNull(),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});

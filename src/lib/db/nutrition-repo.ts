@@ -87,11 +87,11 @@ export async function getMealsForDate(db: SQLiteDatabase, date: string): Promise
   );
 }
 
-export type NotionMealRef = { id: number; date: string; source_ref: string; source_text: string; fiber: number | null };
+export type NotionMealRef = { id: number; date: string; source_ref: string; source_text: string; estimate_version: number | null };
 
 export async function getNotionMealsSince(db: SQLiteDatabase, sinceDate: string): Promise<NotionMealRef[]> {
   return db.getAllAsync<NotionMealRef>(
-    `SELECT id, date, source_ref, source_text, fiber FROM nutrition_entry
+    `SELECT id, date, source_ref, source_text, estimate_version FROM nutrition_entry
      WHERE source = 'notion' AND date >= ?`,
     [sinceDate],
   );
@@ -110,17 +110,18 @@ export async function upsertNotionMeal(
     carbs: number;
     fats: number;
     fiber: number;
+    estimateVersion: number;
   },
 ): Promise<void> {
   await db.runAsync(
-    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, fiber, source, source_ref, source_text)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'notion', ?, ?)
+    `INSERT INTO nutrition_entry (date, meal_name, calories, protein, carbs, fats, fiber, source, source_ref, source_text, estimate_version)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'notion', ?, ?, ?)
      ON CONFLICT(source_ref) DO UPDATE SET
        date = excluded.date, meal_name = excluded.meal_name,
        calories = excluded.calories, protein = excluded.protein,
        carbs = excluded.carbs, fats = excluded.fats, fiber = excluded.fiber,
-       source_text = excluded.source_text, updated_at = datetime('now')`,
-    [meal.date, meal.mealName, meal.calories, meal.protein, meal.carbs, meal.fats, meal.fiber, meal.sourceRef, meal.text],
+       source_text = excluded.source_text, estimate_version = excluded.estimate_version, updated_at = datetime('now')`,
+    [meal.date, meal.mealName, meal.calories, meal.protein, meal.carbs, meal.fats, meal.fiber, meal.sourceRef, meal.text, meal.estimateVersion],
   );
 }
 

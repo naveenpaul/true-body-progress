@@ -43,6 +43,13 @@
       "when": 1792473786671,
       "tag": "0005_nutrition_fiber",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792475481831,
+      "tag": "0006_meal_estimator_v2",
+      "breakpoints": true
     }
   ]
 }

@@ -145,7 +145,7 @@ const DEFAULT_EXERCISES: ExerciseSeed[] = [
 // Bumped whenever bundled foods change in a way that should re-seed.
 // We INSERT OR IGNORE on stable string ids so re-running is safe — bumping
 // this just lets us add new builtin rows without nuking custom foods.
-const FOODS_SEED_VERSION = 4;
+const FOODS_SEED_VERSION = 5;
 
 export async function seedFoods(db: SQLiteDatabase): Promise<void> {
   await initFoodsFts(db);
